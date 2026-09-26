@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoJobs Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+/* ── Tokens: a night atlas. Work modes use hypsometric tints ─────────────── */
+:root {
+  --ink: #e9e5d9;          /* paper-white text */
+  --ink-2: #a9b3b8;
+  --ink-3: #6f7d85;
+  --deep: #0d1920;         /* abyssal plain */
+  --shelf: #13232c;        /* continental shelf */
+  --shelf-2: #1a2f3a;
+  --rule: #24404e;
+  --focus: #f3d38b;
+  --onsite: #e0a458;       /* highland ochre */
+  --hybrid: #d58aa8;       /* rose */
+  --rcountry: #72bfd1;     /* shallow sea */
+  --rworld: #9fd07c;       /* lowland */
+  --radius: 10px;
+  --side-w: 420px;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-feature-settings: "tnum" 1;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --ink: #1d2a31; --ink-2: #4b5b63; --ink-3: #7d8a90;
+  --deep: #eef1ee; --shelf: #ffffff; --shelf-2: #f3f5f2; --rule: #d6dcd8; --focus: #9a6a12;
+  --onsite: #c07a1f; --hybrid: #b4557e; --rcountry: #2e8aa3; --rworld: #4f9a2b;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--deep); color: var(--ink); }
+body { overflow: hidden; font-size: 14px; line-height: 1.45; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+#map { position: absolute; inset: 0; }
+
+/* ── Sidebar ──────────────────────────────────────────────────────────── */
+#side {
+  position: absolute; z-index: 5; top: 12px; left: 12px; bottom: 12px; width: var(--side-w);
+  display: flex; flex-direction: column; background: color-mix(in srgb, var(--shelf) 94%, transparent);
+  backdrop-filter: blur(10px); border: 1px solid var(--rule); border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.35); transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+}
+#side.closed { transform: translateX(calc(-100% - 24px)); opacity: 0; pointer-events: none; }
+.side-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--rule); }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { flex: none; }
+.brand h1 { font-size: 19px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+.brand .spacer { flex: 1; }
+.icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--rule); background: transparent; cursor: pointer; }
+.icon-btn:hover { background: var(--shelf-2); }
+.icon-btn { position: relative; }
+.icon-btn[aria-expanded="true"] { background: var(--shelf-2); color: var(--focus); }
+.badge { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: var(--focus); color: var(--deep); font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; }
+#side.filters-off .controls { display: none; }
+.stats { display: flex; gap: 18px; margin-top: 12px; }
+.stat b { display: block; font-size: 20px; font-weight: 600; line-height: 1.1; }
+.stat span { color: var(--ink-3); font-size: 12px; }
+.demo-note { margin-top: 10px; font-size: 12px; color: var(--focus); }
+
+.controls { padding: 12px 18px; border-bottom: 1px solid var(--rule); display: grid; gap: 10px; }
+.search { position: relative; }
+.search input { width: 100%; padding: 9px 12px 9px 34px; border-radius: 9px; border: 1px solid var(--rule); background: var(--shelf-2); }
+.search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--ink-3); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.row > .lbl { color: var(--ink-3); font-size: 12px; width: 62px; flex: none; }
+.chip { border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip:hover { border-color: var(--ink-3); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--deep); border-color: var(--ink); }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.selects { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.selects select { width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--shelf-2); font-size: 12.5px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 9px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 5px 11px; font-size: 12.5px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--shelf-2); color: var(--focus); font-weight: 600; }
+.toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; margin-left: auto; }
+.toggle input { accent-color: var(--focus); }
+.link-btn { border: 0; background: none; color: var(--ink-3); font-size: 12px; cursor: pointer; text-decoration: underline; padding: 0; }
+
+/* ── List ─────────────────────────────────────────────────────────────── */
+#list { flex: 1; overflow-y: auto; scroll-behavior: smooth; padding-bottom: 45vh; }
+.group > summary { list-style: none; position: sticky; top: 0; z-index: 2; cursor: pointer; display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 18px 7px; background: var(--shelf); border-bottom: 1px solid var(--rule); font-weight: 600; }
+.group > summary::-webkit-details-marker { display: none; }
+.group > summary .count { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.group > summary .chev { transition: transform .2s; display: inline-block; margin-right: 6px; color: var(--ink-3); }
+.group:not([open]) > summary .chev { transform: rotate(-90deg); }
+.job { position: relative; padding: 12px 18px 12px 22px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); cursor: pointer; transition: background .2s; }
+.job::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 3px 3px 0; background: var(--c); opacity: .55; transition: opacity .2s, width .2s; }
+.job:hover { background: var(--shelf-2); }
+.job.active { background: var(--shelf-2); }
+.job.active::before { opacity: 1; width: 6px; }
+.job h3 { margin: 0 0 3px; font-size: 14.5px; font-weight: 600; line-height: 1.3; }
+.job .co { color: var(--ink-2); font-size: 13px; }
+.job .meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.tag { font-size: 11.5px; padding: 1px 7px; border-radius: 5px; background: var(--shelf-2); border: 1px solid var(--rule); color: var(--ink-2); }
+.tag.mode { color: var(--c); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
+.tag.new { color: var(--focus); border-color: color-mix(in srgb, var(--focus) 50%, transparent); }
+.job .when { position: absolute; right: 18px; top: 13px; font-size: 12px; color: var(--ink-3); }
+.job h3 { padding-right: 58px; }
+.job .coord { display: none; margin-top: 6px; font-size: 11.5px; color: var(--focus); letter-spacing: .02em; }
+.job.active .coord { display: block; }
+.empty { padding: 40px 24px; color: var(--ink-2); text-align: center; }
+
+/* ── Map chrome ───────────────────────────────────────────────────────── */
+#openSide { position: absolute; z-index: 4; top: 16px; left: 16px; display: none; gap: 8px; align-items: center;
+  padding: 8px 14px; border-radius: 10px; border: 1px solid var(--rule); background: var(--shelf); cursor: pointer; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+#side.closed ~ #openSide { display: inline-flex; }
+#legend { position: absolute; z-index: 4; right: 12px; bottom: 30px; background: color-mix(in srgb, var(--shelf) 94%, transparent);
+  border: 1px solid var(--rule); border-radius: 12px; padding: 10px 12px; display: grid; gap: 5px; font-size: 12.5px; min-width: 190px; }
+#legend button { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+#legend button:hover { color: var(--focus); }
+#legend .n { margin-left: auto; color: var(--ink-3); }
+#legend hr { border: 0; border-top: 1px solid var(--rule); margin: 4px 0; width: 100%; }
+
+/* The sighting reticle: appears while the list steers the map */
+#reticle { position: absolute; z-index: 3; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; pointer-events: none;
+  opacity: 0; transition: opacity .3s; color: var(--focus); }
+#reticle.on { opacity: .9; }
+#reticle.on circle.sweep { animation: sweep 1.1s ease-out; transform-origin: 38px 38px; }
+@keyframes sweep { from { transform: scale(2.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+#loading { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; background: var(--deep); transition: opacity .5s; }
+#loading.gone { opacity: 0; pointer-events: none; }
+#loading p { color: var(--ink-2); }
+#toast { position: absolute; z-index: 9; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--deep);
+  padding: 8px 14px; border-radius: 9px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+#toast.on { opacity: 1; }
+
+/* ── Popup ────────────────────────────────────────────────────────────── */
+.maplibregl-popup-content { background: var(--shelf) !important; color: var(--ink); border: 1px solid var(--rule); border-radius: 12px !important;
+  padding: 0 !important; box-shadow: 0 16px 40px rgba(0,0,0,.4) !important; font-family: inherit; }
+.maplibregl-popup-tip { border-top-color: var(--rule) !important; border-bottom-color: var(--rule) !important; }
+.maplibregl-popup-close-button { color: var(--ink-2); font-size: 20px; right: 6px; top: 4px; }
+.pop { width: min(360px, 82vw); }
+.pop .top { padding: 14px 16px 10px; border-bottom: 1px solid var(--rule); border-top: 4px solid var(--c); border-radius: 12px 12px 0 0; }
+.pop h2 { margin: 0 24px 4px 0; font-size: 16px; line-height: 1.3; }
+.pop .co { color: var(--ink-2); }
+.pop dl { display: grid; grid-template-columns: 78px 1fr; gap: 4px 10px; margin: 0; padding: 10px 16px; font-size: 12.5px; }
+.pop dt { color: var(--ink-3); }
+.pop dd { margin: 0; }
+.pop .desc { max-height: 150px; overflow-y: auto; padding: 0 16px 10px; color: var(--ink-2); font-size: 12.5px; white-space: pre-line; }
+.pop .actions { display: flex; gap: 8px; align-items: center; padding: 10px 16px 14px; border-top: 1px solid var(--rule); }
+.pop .apply { background: var(--ink); color: var(--deep); text-decoration: none; padding: 7px 13px; border-radius: 8px; font-weight: 600; font-size: 13px; }
+.pop .via { color: var(--ink-3); font-size: 12px; }
+.pop .via a { color: var(--ink-2); }
+.pop .also { padding: 0 16px 10px; font-size: 12px; color: var(--ink-3); }
+.pop .also a { color: var(--ink-2); margin-right: 8px; }
+.maplibregl-ctrl-group { background: var(--shelf) !important; border: 1px solid var(--rule); }
+.maplibregl-ctrl-group button + button { border-top-color: var(--rule) !important; }
+:root:not([data-theme="light"]) .maplibregl-ctrl-icon { filter: invert(1) hue-rotate(180deg); }
+
+@media (max-width: 760px) {
+  :root { --side-w: calc(100vw - 16px); }
+  #side { top: auto; left: 8px; bottom: 8px; height: 62vh; }
+  .side-head { padding: 12px 14px 10px; }
+  .stats { gap: 14px; margin-top: 8px; }
+  .stat b { font-size: 17px; }
+  .demo-note { margin-top: 6px; }
+  #legend { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div id="map" aria-label="Map of geospatial jobs"></div>
+
+<svg id="reticle" viewBox="0 0 76 76" aria-hidden="true">
+  <circle class="sweep" cx="38" cy="38" r="17" fill="none" stroke="currentColor" stroke-width="1.5"/>
+  <path d="M38 4v18M38 54v18M4 38h18M54 38h18" stroke="currentColor" stroke-width="1.5"/>
+</svg>
+
+<aside id="side" aria-label="Job list">
+  <div class="side-head">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+        <circle cx="15" cy="15" r="13" fill="none" stroke="var(--rcountry)" stroke-width="1.6"/>
+        <ellipse cx="15" cy="15" rx="6" ry="13" fill="none" stroke="var(--rcountry)" stroke-width="1.2"/>
+        <path d="M2.5 11h25M2.5 19h25" stroke="var(--rcountry)" stroke-width="1.2"/>
+        <circle cx="20" cy="10" r="3.2" fill="var(--onsite)"/>
+      </svg>
+      <h1>GeoJobs</h1>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="filtersBtn" title="Show or hide filters" aria-label="Show or hide filters" aria-expanded="true" aria-controls="controls">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        <span class="badge" id="filterBadge" hidden></span>
+      </button>
+      <button class="icon-btn" id="themeBtn" title="Switch light / dark map" aria-label="Switch light or dark map">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+      </button>
+      <button class="icon-btn" id="closeSide" title="Hide list" aria-label="Hide list">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="sJobs">–</b><span>jobs shown</span></div>
+      <div class="stat"><b id="sCountries">–</b><span>countries</span></div>
+      <div class="stat"><b id="sNew">–</b><span>new in 48 h</span></div>
+      <div class="stat"><b id="sSources">–</b><span>boards</span></div>
+    </div>
+    <div class="demo-note" id="demoNote" hidden>Showing demo data. Connect the Apps Script endpoint to load live jobs.</div>
+  </div>
+
+  <div class="controls" id="controls">
+    <label class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="q" type="search" placeholder="Search title, company, skill, city" aria-label="Search jobs">
+    </label>
+    <div class="row" id="typeChips"><span class="lbl">Contract</span></div>
+    <div class="row" id="modeChips"><span class="lbl">Work</span></div>
+    <div class="selects">
+      <select id="lang" aria-label="Language"><option value="">Any language</option></select>
+      <select id="source" aria-label="Job board"><option value="">All boards</option></select>
+      <select id="days" aria-label="Posted within">
+        <option value="0">Any date</option><option value="2">Last 48 h</option><option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option><option value="30">Last 30 days</option>
+      </select>
+    </div>
+    <div class="row">
+      <span class="lbl">Group by</span>
+      <div class="seg" id="groupSeg">
+        <button data-g="date" aria-pressed="true">Date</button>
+        <button data-g="country" aria-pressed="false">Country</button>
+        <button data-g="type" aria-pressed="false">Contract</button>
+        <button data-g="mode" aria-pressed="false">Work</button>
+      </div>
+      <label class="toggle" title="Scrolling the list moves the map"><input type="checkbox" id="follow" checked> Follow scroll</label>
+    </div>
+    <div class="row"><button class="link-btn" id="reset">Clear filters</button></div>
+  </div>
+
+  <div id="list" tabindex="0"></div>
+</aside>
+
+<button id="openSide" aria-label="Show list">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+  <span id="openCount">Jobs</span>
+</button>
+
+<div id="legend" aria-label="Legend"></div>
+<div id="toast" role="status"></div>
+<div id="loading"><p>Loading jobs…</p></div>
+
+<script>
+/* ═══════════════════════════ CONFIG ═══════════════════════════════════════
+   API_URL: your Apps Script web-app URL (…/exec) when this file is hosted
+   outside Apps Script (GitHub Pages, Netlify, opened from disk…). Data is
+   loaded with JSONP, so there is no CORS to configure. Inside Apps Script it
+   uses google.script.run automatically. Empty + not in Apps Script = demo.   */
+const CONFIG = {
+  API_URL: 'https://script.google.com/macros/s/AKfycbyHw7-6CbVz9M4gvZ_6yqv8ZEX_gAGal0wWD9VtDGyZ6HkLl0ujkqp7P60D-S3nwd6N1w/exec',                 // ← paste your Apps Script web-app URL (…/exec) here
+  WORLD_ANCHOR: [-33, 16],     // where "remote worldwide" jobs orbit (mid-Atlantic)
+  ZOOM: { city: 10, state: 6.2, country: 5, region: 3.4, worldwide: 4.6 }
+};
+
+const MODES = {
+  'onsite':           { label: 'On-site',            css: '--onsite' },
+  'hybrid':           { label: 'Hybrid',             css: '--hybrid' },
+  'remote-country':   { label: 'Remote in country',  css: '--rcountry' },
+  'remote-worldwide': { label: 'Remote worldwide',   css: '--rworld' }
+};
+const TYPES = { permanent: 'Permanent', contract: 'Contract', freelance: 'Freelance', internship: 'Internship' };
+const LANGS = { en:'English', de:'German', fr:'French', es:'Spanish', pt:'Portuguese', it:'Italian', nl:'Dutch', pl:'Polish',
+  sv:'Swedish', ar:'Arabic', he:'Hebrew', ru:'Russian', ja:'Japanese', ko:'Korean', zh:'Chinese' };
+const STYLES = {
+  dark:  'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+  light: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+};
+
+const state = { q: '', types: new Set(), modes: new Set(), lang: '', source: '', days: 0, group: 'date', follow: true, activeId: null };
+let ALL = [], VISIBLE = [], map, popup, theme = 'dark', steering = false, silentUntil = 0;
+const $ = s => document.querySelector(s);
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+/* ═══════════════════════════ DATA ═════════════════════════════════════════ */
+function loadJobs() {
+  return new Promise((resolve, reject) => {
+    if (window.google && google.script && google.script.run) {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getJobs();
+    } else if (CONFIG.API_URL) {
+      jsonp(CONFIG.API_URL).then(resolve).catch(reject);
+    } else {
+      $('#demoNote').hidden = false;
+      resolve({ jobs: demoJobs() });
+    }
+  });
+}
+
+/* Map settings from the sheet's MapConfig tab, sent with the data. Anything
+   missing or malformed keeps the default in CONFIG above. */
+function applyServerConfig(c) {
+  if (!c || typeof c !== 'object') return;
+  const num = (v, lo, hi) => typeof v === 'number' && isFinite(v) && v >= lo && v <= hi;
+  const a = c.WORLD_ANCHOR;
+  if (Array.isArray(a) && num(a[0], -180, 180) && num(a[1], -85, 85)) CONFIG.WORLD_ANCHOR = [a[0], a[1]];
+  [['city', 'ZOOM_CITY'], ['state', 'ZOOM_STATE'], ['country', 'ZOOM_COUNTRY'], ['region', 'ZOOM_REGION'], ['worldwide', 'ZOOM_WORLDWIDE']]
+    .forEach(([level, key]) => { if (num(c[key], 0, 20)) CONFIG.ZOOM[level] = c[key]; });
+  if (['date', 'country', 'type', 'mode'].includes(c.DEFAULT_GROUP)) {
+    state.group = c.DEFAULT_GROUP;
+    document.querySelectorAll('#groupSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.g === state.group));
+  }
+  if (['dark', 'light'].includes(c.DEFAULT_THEME) && c.DEFAULT_THEME !== theme) {
+    theme = c.DEFAULT_THEME;
+    document.documentElement.dataset.theme = theme;
+    map.setStyle(STYLES[theme], { diff: false });   // full reload, so style.load re-adds our layers
+  }
+  const w = map.getSource && map.getSource('world');
+  if (w) w.setData(worldLabel());
+}
+
+/* JSONP: load the data as a <script> from the Apps Script URL. A script tag
+   isn't subject to CORS, so this works from any domain or straight from disk. */
+function jsonp(url) {
+  return new Promise((resolve, reject) => {
+    const cb = 'geojobsData_' + Date.now();
+    const s = document.createElement('script');
+    const done = () => { clearTimeout(timer); delete window[cb]; s.remove(); };
+    const timer = setTimeout(() => { done(); reject(new Error('the data URL took too long to answer')); }, 45000);
+    window[cb] = data => { done(); resolve(data); };
+    s.onerror = () => { done(); diagnose(url).then(resolve, reject); };
+    s.src = url.split('?')[0] + '?callback=' + cb;
+    document.head.appendChild(s);
+  });
+}
+
+/* JSONP failed: ask for ?format=json to find out why, and use it if it works. */
+function diagnose(url) {
+  const base = url.split('?')[0];
+  return fetch(base + '?format=json').then(r => r.text()).then(text => {
+    try { return JSON.parse(text); }                           // JSON works → just use it
+    catch (e) {
+      const title = (text.match(/<title>([^<]*)<\/title>/i) || [])[1] || '';
+      if (/<title>\s*GeoJobs Map/i.test(text))
+        throw new Error('the web app is still serving the old code. In Apps Script: Deploy → Manage deployments → edit → Version: New version → Deploy');
+      if (/sign in|accounts\.google/i.test(text))
+        throw new Error('Google asked for a sign-in. Set the web app access to "Anyone" (not "Anyone with a Google account")');
+      throw new Error('the web app returned an error page' + (title ? ' ("' + title.trim() + '")' : '') + '. Open ' + base + '?format=json in a tab to see it');
+    }
+  }, () => {
+    throw new Error('the web app could not be reached. Open ' + base + '?callback=test in a tab: it should start with test({ . If it shows the map or an error, deploy a new version');
+  });
+}
+
+function prepare(jobs) {
+  const now = Date.now();
+  const stacks = new Map();
+  let w = 0;
+  jobs.forEach((j, i) => {
+    j.id = j.id || 'j' + i;
+    j._t = j.postedAt ? new Date(j.postedAt).getTime() : now;
+    j._new = now - j._t < 48 * 3600e3;
+    j.workMode = MODES[j.workMode] ? j.workMode : 'onsite';
+    j.jobType = TYPES[j.jobType] ? j.jobType : 'permanent';
+    const hasXY = j.lat != null && j.lng != null && j.lat !== '' && !isNaN(j.lat);
+    if (j.workMode === 'remote-worldwide' || !hasXY) {
+      j._located = j.workMode === 'remote-worldwide';
+      if (!j._located) return;
+      const a = w * 2.39996, r = 0.95 * Math.sqrt(w++);            // golden-angle spiral
+      j._x = CONFIG.WORLD_ANCHOR[0] + r * Math.cos(a) * 1.25;
+      j._y = CONFIG.WORLD_ANCHOR[1] + r * Math.sin(a);
+      j._level = 'worldwide';
+      return;
+    }
+    j._located = true;
+    j._level = j.geoLevel || 'city';
+    const key = (+j.lat).toFixed(3) + ',' + (+j.lng).toFixed(3);
+    const n = stacks.get(key) || 0; stacks.set(key, n + 1);
+    const spread = j._level === 'city' ? 0.012 : 0.05;             // fan out jobs sharing a point
+    const a = n * 2.39996, r = n ? spread * Math.sqrt(n) : 0;
+    j._x = +j.lng + r * Math.cos(a); j._y = +j.lat + r * Math.sin(a);
+  });
+  return jobs.sort((a, b) => b._t - a._t);
+}
+
+function applyFilters() {
+  const q = state.q.toLowerCase().trim();
+  const cutoff = state.days ? Date.now() - state.days * 864e5 : 0;
+  VISIBLE = ALL.filter(j =>
+    (!state.types.size || state.types.has(j.jobType)) &&
+    (!state.modes.size || state.modes.has(j.workMode)) &&
+    (!state.lang || j.language === state.lang) &&
+    (!state.source || j.source === state.source) &&
+    (!cutoff || j._t >= cutoff) &&
+    (!q || [j.title, j.company, j.city, j.country, j.tags, j.description, j.remoteScope].join(' ').toLowerCase().includes(q))
+  );
+  silentUntil = Date.now() + 700;                            // re-render shouldn't yank the map
+  updateMap(); renderList(); renderStats(); renderLegend();
+}
+
+/* ═══════════════════════════ MAP ══════════════════════════════════════════ */
+function initMap() {
+  map = new maplibregl.Map({ container: 'map', style: STYLES.dark, center: [15, 25], zoom: 1.6, attributionControl: { compact: true } });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  popup = new maplibregl.Popup({ maxWidth: '380px', offset: 14, focusAfterOpen: false });
+  map.on('style.load', () => { tintBasemap(); addLayers(); updateMap(); });
+  map.on('click', 'clusters', e => {
+    const f = e.features[0];
+    map.getSource('jobs').getClusterExpansionZoom(f.properties.cluster_id).then(z =>
+      map.easeTo({ center: f.geometry.coordinates, zoom: z + 0.3 }));
+  });
+  map.on('click', 'points', e => { const j = byId(e.features[0].properties.id); if (j) { openPopup(j); focusRow(j.id, true); } });
+  map.on('click', 'world-label', () => flyToWorld());
+  ['clusters', 'points', 'world-label'].forEach(l => {
+    map.on('mouseenter', l, () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', l, () => map.getCanvas().style.cursor = '');
+  });
+  map.on('movestart', e => { if (e.originalEvent) $('#reticle').classList.remove('on'); });
+}
+
+function tintBasemap() {  // turn CARTO dark-matter into a blue night atlas
+  if (theme !== 'dark') return;
+  const set = (id, p, v) => { if (map.getLayer(id)) map.setPaintProperty(id, p, v); };
+  set('background', 'background-color', '#101d24');
+  set('water', 'fill-color', '#0a141a');
+  set('boundary_country_inner', 'line-color', '#35505d');
+}
+
+function addLayers() {
+  const c = k => cssVar(MODES[k].css);
+  const modeColor = ['match', ['get', 'mode'], 'onsite', c('onsite'), 'hybrid', c('hybrid'),
+    'remote-country', c('remote-country'), c('remote-worldwide')];
+  map.addSource('jobs', { type: 'geojson', data: fc([]), cluster: true, clusterRadius: 44, clusterMaxZoom: 11 });
+  map.addSource('world', { type: 'geojson', data: worldLabel() });
+
+  map.addLayer({ id: 'clusters', type: 'circle', source: 'jobs', filter: ['has', 'point_count'], paint: {
+    'circle-color': cssVar('--shelf-2'), 'circle-stroke-color': cssVar('--rcountry'), 'circle-stroke-width': 1.5,
+    'circle-radius': ['step', ['get', 'point_count'], 15, 10, 19, 40, 25, 120, 32] } });
+  map.addLayer({ id: 'cluster-count', type: 'symbol', source: 'jobs', filter: ['has', 'point_count'], layout: {
+    'text-field': ['get', 'point_count_abbreviated'], 'text-font': ['Montserrat Medium', 'Open Sans Bold'], 'text-size': 12.5 },
+    paint: { 'text-color': cssVar('--ink') } });
+  map.addLayer({ id: 'halo', type: 'circle', source: 'jobs', filter: ['==', ['get', 'id'], '__none'], paint: {
+    'circle-radius': 17, 'circle-color': 'transparent', 'circle-stroke-color': cssVar('--focus'), 'circle-stroke-width': 2.5 } });
+  map.addLayer({ id: 'points', type: 'circle', source: 'jobs', filter: ['!', ['has', 'point_count']], paint: {
+    'circle-color': modeColor, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 5, 10, 8],
+    'circle-stroke-width': ['case', ['get', 'isNew'], 2.4, 1], 'circle-stroke-color': ['case', ['get', 'isNew'], cssVar('--focus'), cssVar('--deep')] } });
+  map.addLayer({ id: 'labels', type: 'symbol', source: 'jobs', filter: ['!', ['has', 'point_count']], minzoom: 3.5, layout: {
+    'text-field': ['format', ['get', 'label'], { 'font-scale': 1 }, '\n', {}, ['get', 'sub'], { 'font-scale': 0.82 }],
+    'text-font': ['Montserrat Medium', 'Open Sans Bold'], 'text-size': 12, 'text-anchor': 'left', 'text-offset': [0.9, 0],
+    'text-max-width': 16, 'text-justify': 'left', 'text-optional': true },
+    paint: { 'text-color': cssVar('--ink'), 'text-halo-color': cssVar('--deep'), 'text-halo-width': 1.4 } });
+  map.addLayer({ id: 'world-label', type: 'symbol', source: 'world', layout: {
+    'text-field': 'Remote, anywhere in the world', 'text-font': ['Montserrat Medium', 'Open Sans Bold'], 'text-size': 13, 'text-allow-overlap': true },
+    paint: { 'text-color': cssVar('--rworld'), 'text-halo-color': cssVar('--deep'), 'text-halo-width': 1.5 } });
+}
+
+const fc = features => ({ type: 'FeatureCollection', features });
+const worldLabel = () => fc([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [CONFIG.WORLD_ANCHOR[0], CONFIG.WORLD_ANCHOR[1] + 7.5] } }]);
+function updateMap() {
+  if (!map || !map.getSource('jobs')) return;
+  map.getSource('jobs').setData(fc(VISIBLE.filter(j => j._located).map(j => ({
+    type: 'Feature', geometry: { type: 'Point', coordinates: [j._x, j._y] },
+    properties: { id: j.id, mode: j.workMode, isNew: j._new,
+      label: truncate(j.title, 42), sub: shortDate(j._t) + '  ' + TYPES[j.jobType] + (j.company ? '  ' + truncate(j.company, 22) : '') }
+  }))));
+  const worldCount = VISIBLE.filter(j => j.workMode === 'remote-worldwide').length;
+  map.setLayoutProperty('world-label', 'visibility', worldCount ? 'visible' : 'none');
+  highlight(state.activeId);
+}
+
+function highlight(id) { if (map && map.getLayer('halo')) map.setFilter('halo', ['==', ['get', 'id'], id || '__none']); }
+
+function flyToJob(j, withPopup) {
+  if (!j._located) return toast('No location found for this post');
+  steering = true;
+  const z = Math.max(CONFIG.ZOOM[j._level] || 8, j._level === 'city' && map.getZoom() > CONFIG.ZOOM.city ? map.getZoom() : 0);
+  const sideOpen = !$('#side').classList.contains('closed') && innerWidth > 760;
+  map.flyTo({ center: [j._x, j._y], zoom: z, speed: 1.4, curve: 1.5, essential: true,
+    padding: { left: sideOpen ? $('#side').offsetWidth + 24 : 0, bottom: innerWidth <= 760 ? innerHeight * 0.6 : 0 } });
+  const ret = $('#reticle');
+  ret.style.left = sideOpen ? `calc(50% + ${($('#side').offsetWidth + 24) / 2}px)` : '50%';
+  ret.style.top = innerWidth <= 760 ? '20%' : '50%';
+  ret.classList.remove('on'); void ret.offsetWidth; ret.classList.add('on');
+  state.activeId = j.id; highlight(j.id);
+  if (withPopup) map.once('moveend', () => openPopup(j));
+}
+
+function flyToWorld() {
+  map.flyTo({ center: CONFIG.WORLD_ANCHOR, zoom: CONFIG.ZOOM.worldwide, speed: 1.3 });
+  state.modes = new Set(['remote-worldwide']); syncChips(); applyFilters();
+}
+
+function openPopup(j) {
+  const color = cssVar(MODES[j.workMode].css);
+  const loc = j.workMode === 'remote-worldwide' ? 'Anywhere'
+    : [j.city, j.country].filter(Boolean).join(', ') || j.locationRaw || 'Not stated';
+  const levelNote = { country: 'country level, pinned to the capital', region: 'region level', state: 'state level' }[j._level];
+  const also = String(j.alsoOn || '').split(' | ').filter(Boolean).map(s => {
+    const i = s.indexOf(' http'); return i > 0 ? `<a href="${esc(s.slice(i + 1))}" target="_blank" rel="noopener">${esc(s.slice(0, i))}</a>` : '';
+  }).join('');
+  popup.setLngLat([j._x, j._y]).setHTML(`
+    <article class="pop">
+      <div class="top" style="--c:${color}">
+        <h2>${esc(j.title)}</h2>
+        <div class="co">${esc(j.company || 'Company not listed')}</div>
+      </div>
+      <dl>
+        <dt>Location</dt><dd>${esc(loc)}${levelNote ? `<br><span style="color:var(--ink-3)">${levelNote}</span>` : ''}</dd>
+        <dt>Work</dt><dd style="color:${color}">${MODES[j.workMode].label}${j.remoteScope && j.workMode === 'remote-country' ? ': ' + esc(j.remoteScope) : ''}</dd>
+        <dt>Contract</dt><dd>${TYPES[j.jobType]}</dd>
+        <dt>Posted</dt><dd>${new Date(j._t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} (${relDate(j._t)})</dd>
+        <dt>Language</dt><dd>${esc(LANGS[j.language] || j.language || 'Unknown')}</dd>
+        ${j.salary ? `<dt>Salary</dt><dd>${esc(j.salary)}</dd>` : ''}
+        ${j.tags ? `<dt>Tags</dt><dd>${esc(j.tags)}</dd>` : ''}
+      </dl>
+      ${j.description ? `<div class="desc">${esc(j.description)}${j.description.length >= 890 ? '…' : ''}</div>` : ''}
+      ${also ? `<div class="also">Also posted on ${also}</div>` : ''}
+      <div class="actions">
+        <a class="apply" href="${esc(j.url)}" target="_blank" rel="noopener">Open the posting</a>
+        <span class="via">Source: <a href="${esc(j.sourceHome || j.url)}" target="_blank" rel="noopener">${esc(j.source)}</a></span>
+      </div>
+    </article>`).addTo(map);
+}
+
+/* ═══════════════════════════ LIST ═════════════════════════════════════════ */
+let observer;
+function renderList() {
+  const list = $('#list');
+  if (!VISIBLE.length) {
+    list.innerHTML = `<div class="empty">No jobs match these filters.<br><button class="link-btn" onclick="resetFilters()">Clear filters</button></div>`;
+    return;
+  }
+  const groups = new Map();
+  VISIBLE.forEach(j => { const k = groupKey(j); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(j); });
+  let keys = [...groups.keys()];
+  if (state.group === 'date') keys.sort((a, b) => DATE_ORDER.indexOf(a) - DATE_ORDER.indexOf(b));
+  else if (state.group === 'country') keys.sort((a, b) => (a === WORLD_KEY) - (b === WORLD_KEY) || groups.get(b).length - groups.get(a).length || a.localeCompare(b));
+  else keys.sort((a, b) => groups.get(b).length - groups.get(a).length);
+
+  list.innerHTML = keys.map(k => `
+    <details class="group" open>
+      <summary><span><span class="chev">▾</span>${esc(groupLabel(k))}</span><span class="count">${groups.get(k).length}</span></summary>
+      ${groups.get(k).map(rowHTML).join('')}
+    </details>`).join('');
+
+  if (observer) observer.disconnect();
+  observer = new IntersectionObserver(onRowsCross, { root: list, rootMargin: '-28% 0px -62% 0px', threshold: 0 });
+  list.querySelectorAll('.job').forEach(el => observer.observe(el));
+  if (state.activeId) list.querySelector(`[data-id="${state.activeId}"]`)?.classList.add('active');
+}
+
+function rowHTML(j) {
+  const m = MODES[j.workMode];
+  const where = j.workMode === 'remote-worldwide' ? 'Anywhere'
+    : [j.city, j.country].filter(Boolean).join(', ') || j.remoteScope || j.locationRaw || 'Location not found';
+  const coord = j._located && j.workMode !== 'remote-worldwide' ? dms(+j.lat, +j.lng) + (j._level === 'country' ? '  (capital)' : '') : 'Remote, no fixed location';
+  return `<div class="job" data-id="${esc(j.id)}" style="--c:var(${m.css})" tabindex="0" role="button" aria-label="${esc(j.title)}">
+    <span class="when">${relDate(j._t)}</span>
+    <h3>${esc(j.title)}</h3>
+    <div class="co">${esc(j.company || 'Company not listed')}, ${esc(where)}</div>
+    <div class="meta">
+      ${j._new ? '<span class="tag new">New</span>' : ''}
+      <span class="tag mode">${m.label}</span>
+      <span class="tag">${TYPES[j.jobType]}</span>
+      ${j.language && j.language !== 'en' ? `<span class="tag">${esc(LANGS[j.language] || j.language)}</span>` : ''}
+      <span class="tag">${esc(j.source)}</span>
+    </div>
+    <div class="coord">${coord}</div>
+  </div>`;
+}
+
+let crossTimer;
+function onRowsCross(entries) {
+  if (!state.follow || Date.now() < silentUntil) return;
+  const hit = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+  if (!hit) return;
+  clearTimeout(crossTimer);
+  crossTimer = setTimeout(() => {
+    const j = byId(hit.target.dataset.id); if (!j) return;
+    setActiveRow(j.id); popup.remove(); flyToJob(j, false);
+  }, 180);
+}
+
+function setActiveRow(id) {
+  document.querySelectorAll('.job.active').forEach(el => el.classList.remove('active'));
+  $(`#list [data-id="${CSS.escape(id)}"]`)?.classList.add('active');
+  state.activeId = id;
+}
+
+function focusRow(id, scroll) {
+  setActiveRow(id); highlight(id);
+  const el = $(`#list [data-id="${CSS.escape(id)}"]`);
+  if (el && scroll) {
+    silentUntil = Date.now() + 1200;                         // don't let the list steer back
+    const d = el.closest('details'); if (d && !d.open) d.open = true;
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+}
+
+const WORLD_KEY = 'Remote, anywhere';
+const DATE_ORDER = ['Today', 'Yesterday', 'This week', 'Last week', 'This month', 'Older'];
+function groupKey(j) {
+  if (state.group === 'date') {
+    const days = Math.floor((startOfDay(Date.now()) - startOfDay(j._t)) / 864e5);
+    return days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? 'This week' : days < 14 ? 'Last week' : days < 31 ? 'This month' : 'Older';
+  }
+  if (state.group === 'country') return j.workMode === 'remote-worldwide' ? WORLD_KEY : (j.country || j.remoteScope || 'Location not found');
+  if (state.group === 'type') return j.jobType;
+  return j.workMode;
+}
+function groupLabel(k) { return state.group === 'type' ? TYPES[k] : state.group === 'mode' ? MODES[k].label : k; }
+
+/* ═══════════════════════════ UI ═══════════════════════════════════════════ */
+function buildControls() {
+  $('#typeChips').insertAdjacentHTML('beforeend', Object.entries(TYPES).map(([k, v]) =>
+    `<button class="chip" data-type="${k}" aria-pressed="false">${v}</button>`).join(''));
+  $('#modeChips').insertAdjacentHTML('beforeend', Object.entries(MODES).map(([k, v]) =>
+    `<button class="chip" data-mode="${k}" aria-pressed="false"><span class="dot" style="background:var(${v.css})"></span>${v.label}</button>`).join(''));
+  const langs = [...new Set(ALL.map(j => j.language).filter(Boolean))].sort();
+  $('#lang').insertAdjacentHTML('beforeend', langs.map(l => `<option value="${l}">${esc(LANGS[l] || l)}</option>`).join(''));
+  const srcs = [...new Set(ALL.map(j => j.source).filter(Boolean))].sort();
+  $('#source').insertAdjacentHTML('beforeend', srcs.map(s => `<option>${esc(s)}</option>`).join(''));
+
+  document.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { toggleSet(state.types, b.dataset.type); syncChips(); applyFilters(); });
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { toggleSet(state.modes, b.dataset.mode); syncChips(); applyFilters(); });
+  document.querySelectorAll('#groupSeg button').forEach(b => b.onclick = () => {
+    state.group = b.dataset.g; document.querySelectorAll('#groupSeg button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderList(); });
+  let qt; $('#q').oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; applyFilters(); }, 200); };
+  $('#lang').onchange = e => { state.lang = e.target.value; applyFilters(); };
+  $('#source').onchange = e => { state.source = e.target.value; applyFilters(); };
+  $('#days').onchange = e => { state.days = +e.target.value; applyFilters(); };
+  $('#follow').onchange = e => { state.follow = e.target.checked; };
+  $('#reset').onclick = resetFilters;
+  $('#closeSide').onclick = () => $('#side').classList.add('closed');
+  const setFilters = open => { $('#side').classList.toggle('filters-off', !open); $('#filtersBtn').setAttribute('aria-expanded', open); };
+  $('#filtersBtn').onclick = () => setFilters($('#side').classList.contains('filters-off'));
+  setFilters(innerWidth > 760);                                // phones start with filters folded
+  $('#openSide').onclick = () => $('#side').classList.remove('closed');
+  $('#themeBtn').onclick = () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    map.setStyle(STYLES[theme], { diff: false });   // full reload, so style.load re-adds our layers
+  };
+  $('#list').addEventListener('click', e => {
+    const row = e.target.closest('.job'); if (!row) return;
+    const j = byId(row.dataset.id); silentUntil = Date.now() + 1500; setActiveRow(j.id); flyToJob(j, true);
+  });
+  $('#list').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('job')) e.target.click(); });
+}
+
+function syncChips() {
+  document.querySelectorAll('[data-type]').forEach(b => b.setAttribute('aria-pressed', state.types.has(b.dataset.type)));
+  document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', state.modes.has(b.dataset.mode)));
+}
+function resetFilters() {
+  Object.assign(state, { q: '', lang: '', source: '', days: 0 }); state.types.clear(); state.modes.clear();
+  $('#q').value = ''; $('#lang').value = ''; $('#source').value = ''; $('#days').value = '0';
+  syncChips(); applyFilters(); fitAll();
+}
+
+function renderStats() {
+  $('#sJobs').textContent = VISIBLE.length;
+  $('#sCountries').textContent = new Set(VISIBLE.map(j => j.countryCode || j.country).filter(Boolean)).size;
+  $('#sNew').textContent = VISIBLE.filter(j => j._new).length;
+  $('#sSources').textContent = new Set(VISIBLE.map(j => j.source)).size;
+  $('#openCount').textContent = VISIBLE.length + ' jobs';
+  const active = state.types.size + state.modes.size + !!state.lang + !!state.source + !!state.days + !!state.q.trim();
+  $('#filterBadge').hidden = !active; $('#filterBadge').textContent = active;
+}
+
+function renderLegend() {
+  const n = k => VISIBLE.filter(j => j.workMode === k).length;
+  $('#legend').innerHTML = Object.entries(MODES).map(([k, v]) =>
+    `<button data-leg="${k}"><span class="dot" style="background:var(${v.css})"></span>${v.label}<span class="n">${n(k)}</span></button>`).join('') +
+    `<hr><button data-leg="new"><span class="dot" style="background:transparent;border:2px solid var(--focus)"></span>Posted in the last 48 h</button>`;
+  $('#legend').querySelectorAll('[data-leg]').forEach(b => b.onclick = () => {
+    const k = b.dataset.leg;
+    if (k === 'new') { state.days = 2; $('#days').value = '2'; applyFilters(); return; }
+    if (k === 'remote-worldwide') return flyToWorld();
+    toggleSet(state.modes, k); syncChips(); applyFilters();
+  });
+}
+
+function fitAll() {
+  const pts = VISIBLE.filter(j => j._located && j.workMode !== 'remote-worldwide');
+  if (!pts.length) return;
+  const b = new maplibregl.LngLatBounds();
+  pts.forEach(j => b.extend([j._x, j._y]));
+  b.extend(CONFIG.WORLD_ANCHOR);
+  const sideOpen = !$('#side').classList.contains('closed') && innerWidth > 760;
+  map.fitBounds(b, { padding: { top: 60, bottom: 60, right: 230, left: sideOpen ? $('#side').offsetWidth + 50 : 40 }, maxZoom: 5, duration: 1400 });
+}
+
+/* ═══════════════════════════ UTILS ════════════════════════════════════════ */
+const byId = id => ALL.find(j => j.id === id);
+const toggleSet = (s, v) => s.has(v) ? s.delete(v) : s.add(v);
+const truncate = (s, n) => (s = String(s || '')).length > n ? s.slice(0, n - 1) + '…' : s;
+const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const shortDate = t => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+function relDate(t) {
+  const d = Math.floor((startOfDay(Date.now()) - startOfDay(t)) / 864e5);
+  return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 7 ? d + ' days ago' : d < 31 ? Math.round(d / 7) + ' wk ago' : shortDate(t);
+}
+function dms(lat, lng) {
+  const f = (v, p, n) => { const a = Math.abs(v), d = Math.floor(a), m = Math.floor((a - d) * 60), s = Math.round(((a - d) * 60 - m) * 60);
+    return `${d}°${String(m).padStart(2, '0')}′${String(s).padStart(2, '0')}″${v >= 0 ? p : n}`; };
+  return f(lat, 'N', 'S') + '  ' + f(lng, 'E', 'W');
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2200); }
+
+/* ═══════════════════════════ DEMO DATA ════════════════════════════════════
+   Invented sample posts so the page works before the backend is connected.  */
+function demoJobs() {
+  const d = n => new Date(Date.now() - n * 864e5).toISOString();
+  const J = (title, company, city, country, cc, lat, lng, geoLevel, jobType, workMode, language, source, days, extra = {}) =>
+    ({ title, company, city, country, countryCode: cc, lat, lng, geoLevel, jobType, workMode, language, source,
+       sourceHome: 'https://example.com', url: 'https://example.com', postedAt: d(days),
+       description: 'Demo post. Build and maintain GIS data pipelines with PostGIS, Python and ArcGIS Enterprise. Work with the product team on web mapping features and spatial analysis for customers.',
+       tags: 'GIS, PostGIS, Python', ...extra });
+  return [
+    J('Senior GIS Developer', 'Example Mapping Co.', 'Dubai', 'United Arab Emirates', 'AE', 25.2048, 55.2708, 'city', 'permanent', 'onsite', 'en', 'Demo board A', 0, { salary: 'AED 28k–35k / monthly' }),
+    J('Geospatial Solutions Architect', 'Sample Geo Systems', 'Abu Dhabi', 'United Arab Emirates', 'AE', 24.4539, 54.3773, 'country', 'contract', 'hybrid', 'en', 'Demo board B', 1),
+    J('ArcGIS Enterprise Engineer', 'Demo Utilities', 'Riyadh', 'Saudi Arabia', 'SA', 24.7136, 46.6753, 'city', 'contract', 'onsite', 'en', 'Demo board A', 3),
+    J('مطور نظم معلومات جغرافية', 'Sample Consulting', 'Doha', 'Qatar', 'QA', 25.2854, 51.531, 'city', 'permanent', 'onsite', 'ar', 'Demo board C', 2),
+    J('GIS-Entwickler (m/w/d)', 'Beispiel GmbH', 'Munich', 'Germany', 'DE', 48.1351, 11.582, 'city', 'permanent', 'hybrid', 'de', 'Demo board B', 0),
+    J('Ingénieur SIG / Géomatique', 'Exemple SAS', 'Toulouse', 'France', 'FR', 43.6047, 1.4442, 'city', 'permanent', 'onsite', 'fr', 'Demo board C', 5),
+    J('Desarrollador GIS', 'Ejemplo Geo', 'Madrid', 'Spain', 'ES', 40.4168, -3.7038, 'country', 'freelance', 'remote-country', 'es', 'Demo board A', 9, { remoteScope: 'Spain' }),
+    J('Remote Sensing Data Engineer', 'Orbit Sample Labs', null, null, '', null, null, 'worldwide', 'permanent', 'remote-worldwide', 'en', 'Demo board B', 0),
+    J('Freelance QGIS Plugin Developer', 'Open Demo Foundation', null, null, '', null, null, 'worldwide', 'freelance', 'remote-worldwide', 'en', 'Demo board C', 4, { salary: 'USD 60–80 / hourly' }),
+    J('GeoAI Engineer', 'Demo Earth', null, null, '', null, null, 'worldwide', 'contract', 'remote-worldwide', 'en', 'Demo board A', 12),
+    J('Web Mapping Engineer (MapLibre)', 'Sample Tiles', null, null, '', null, null, 'worldwide', 'permanent', 'remote-worldwide', 'en', 'Demo board B', 1),
+    J('GIS Analyst', 'County of Example', 'Denver', 'United States', 'US', 39.7392, -104.9903, 'city', 'permanent', 'onsite', 'en', 'Demo board A', 6),
+    J('Geospatial Data Engineer', 'Demo Insurance', 'Washington, D.C.', 'United States', 'US', 38.9072, -77.0369, 'country', 'permanent', 'remote-country', 'en', 'Demo board C', 2, { remoteScope: 'USA' }),
+    J('LiDAR Processing Specialist', 'Sample Survey Ltd', 'Bristol', 'United Kingdom', 'GB', 51.4545, -2.5879, 'city', 'contract', 'hybrid', 'en', 'Demo board B', 16),
+    J('Senior Spatial Data Scientist', 'Example Analytics', 'Singapore', 'Singapore', 'SG', 1.3521, 103.8198, 'city', 'permanent', 'hybrid', 'en', 'Demo board A', 20),
+    J('GIS Intern', 'Demo Municipality', 'Nairobi', 'Kenya', 'KE', -1.2921, 36.8219, 'city', 'internship', 'onsite', 'en', 'Demo board C', 8),
+    J('Geoprocessing Developer', 'Exemplo Geo', 'São Paulo', 'Brazil', 'BR', -23.5505, -46.6333, 'city', 'permanent', 'onsite', 'pt', 'Demo board B', 27),
+    J('FME Integration Consultant', 'Sample Integrators', 'Amsterdam', 'Netherlands', 'NL', 52.3676, 4.9041, 'city', 'freelance', 'onsite', 'nl', 'Demo board A', 3)
+  ].map((j, i) => ({ id: 'demo' + i, ...j }));
+}
+
+/* ═══════════════════════════ BOOT ═════════════════════════════════════════ */
+let mapReady = false;
+initMap();
+map.once('load', () => { mapReady = true; });
+loadJobs().then(data => {
+  applyServerConfig(data && data.config);
+  ALL = prepare((data && data.jobs) || []);
+  buildControls();
+  applyFilters();
+  let done = false;
+  const go = () => { if (done) return; done = true; silentUntil = Date.now() + 2500; $('#loading').classList.add('gone'); fitAll(); };
+  if (mapReady) go();
+  else { map.once('load', go); setTimeout(go, 6000); }        // never leave the loader up
+}).catch(err => {
+  $('#loading').innerHTML = `<p>Couldn't load jobs: ${esc(err && err.message || err)}.<br>Check the web-app deployment and try again.</p>`;
+});
+</script>
+</body>
+</html>

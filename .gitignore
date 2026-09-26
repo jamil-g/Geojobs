@@ -1,0 +1,13 @@
+# clasp (Apps Script CLI): per-user project id and login token
+.clasp.json
+.clasprc.json
+
+# local secrets / notes
+.env
+*.local.*
+secrets/
+
+# tooling
+node_modules/
+.DS_Store
+Thumbs.db

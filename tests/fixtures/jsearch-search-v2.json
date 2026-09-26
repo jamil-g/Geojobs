@@ -1,0 +1,60 @@
+{
+  "status": "OK",
+  "request_id": "fixture",
+  "data": [
+    {
+      "job_id": "fixture-1",
+      "job_title": "Senior GIS Developer",
+      "employer_name": "Example Mapping Co.",
+      "job_publisher": "LinkedIn",
+      "job_employment_types": ["FULLTIME"],
+      "job_apply_link": "https://www.linkedin.com/jobs/view/0000000001",
+      "job_description": "Build ArcGIS Enterprise and PostGIS web mapping applications. On-site in Dubai.",
+      "job_is_remote": false,
+      "work_arrangement": "onsite",
+      "job_posted_at_datetime_utc": "2026-09-24T10:00:00.000Z",
+      "job_location": "Dubai, Dubai",
+      "job_city": "Dubai",
+      "job_state": "Dubai",
+      "job_country": "AE",
+      "job_latitude": 25.2048,
+      "job_longitude": 55.2708,
+      "required_technologies": ["ArcGIS Enterprise", "PostGIS", "Python"]
+    },
+    {
+      "job_id": "fixture-2",
+      "job_title": "Geospatial Data Engineer (Contract)",
+      "employer_name": "Sample Analytics",
+      "job_publisher": "Indeed",
+      "job_employment_types": ["CONTRACTOR"],
+      "job_apply_link": "https://www.indeed.com/viewjob?jk=0000000002",
+      "job_description": "Remote role, United States only. GDAL, PostGIS, Python pipelines.",
+      "job_is_remote": false,
+      "work_arrangement": "remote",
+      "job_posted_at_timestamp": 1790000000,
+      "job_location": "United States",
+      "job_city": null,
+      "job_state": null,
+      "job_country": "US",
+      "job_latitude": 37.09,
+      "job_longitude": -95.71,
+      "job_min_salary": 60,
+      "job_max_salary": 80,
+      "job_salary_currency": "USD",
+      "job_salary_period": "HOUR"
+    },
+    {
+      "job_id": "fixture-3",
+      "job_title": "Frontend Developer",
+      "employer_name": "Unrelated Inc.",
+      "job_publisher": "Glassdoor",
+      "job_employment_types": ["FULLTIME"],
+      "job_apply_link": "https://www.glassdoor.com/job-listing/0000000003",
+      "job_description": "React, TypeScript, design systems.",
+      "job_is_remote": true,
+      "job_country": "US",
+      "job_latitude": 41.88,
+      "job_longitude": -87.63
+    }
+  ]
+}
