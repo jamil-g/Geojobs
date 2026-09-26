@@ -86,7 +86,9 @@ function sandbox({ props = {}, net = () => ({ code: 404, body: '' }), tabs = {} 
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null }) },
     SpreadsheetApp: { getActive: () => ss, newDataValidation: validation },
     CacheService: { getScriptCache: () => ({
-      get: k => (k in cacheStore ? cacheStore[k] : null), put: (k, v) => { cacheStore[k] = v; }, remove: k => { delete cacheStore[k]; } }) },
+      get: k => (k in cacheStore ? cacheStore[k] : null), put: (k, v) => { cacheStore[k] = v; }, remove: k => { delete cacheStore[k]; },
+      putAll: values => { Object.keys(values).forEach(k => { cacheStore[k] = values[k]; }); },
+      removeAll: keys => { keys.forEach(k => { delete cacheStore[k]; }); } }) },
     ScriptApp: {
       getProjectTriggers: () => triggers.slice(),
       deleteTrigger: t => { triggers.splice(triggers.indexOf(t), 1); },
@@ -423,6 +425,50 @@ console.log('\nSettings: no tabs yet');
   const c = sandbox();
   const p = c.loadConfig_({ fresh: true });
   check('without settings tabs the defaults apply silently', p.warnings.length === 0 && run(c, 'CFG.MAX_AGE_DAYS') === 45 && run(c, 'CFG.KEYWORDS.length') > 30);
+}
+
+console.log('\nJobs cache');
+{
+  const c = sandbox();
+  c.setup();
+  const H = run(c, 'HEADERS');
+  const row = o => H.map(h => (h in o ? o[h] : ''));
+  const jd = tab(c, 'Jobs')._data;
+
+  jd.push(row({ id: 'a', dedupeKey: 'a', title: 'GIS Analyst', company: 'Acme', source: 'Board', url: 'https://x/a' }));
+  const out1 = c.getJobs();
+  check('first call reads the sheet', out1.jobs.length === 1 && out1.jobs[0].title === 'GIS Analyst', out1.jobs);
+  check('the payload is cached, chunked', c._cache['geojobs:jobs:v1:n'] === '1' && typeof c._cache['geojobs:jobs:v1:0'] === 'string');
+
+  jd.push(row({ id: 'b', dedupeKey: 'b', title: 'Remote Sensing Engineer', company: 'Orbit', source: 'Board', url: 'https://x/b' }));
+  const out2 = c.getJobs();
+  check('a second call is served from the cache, not the sheet', out2.jobs.length === 1, out2.jobs.length);
+
+  c.invalidateJobsCache_();
+  check('invalidating removes every chunk', !('geojobs:jobs:v1:n' in c._cache));
+  const out3 = c.getJobs();
+  check('after invalidation the next call re-reads the sheet', out3.jobs.length === 2, out3.jobs.length);
+
+  // cleanupOld invalidates the cache itself once it actually removes a row
+  jd[jd.length - 1][H.indexOf('postedAt')] = run(c, 'new Date(Date.now() - 60 * 864e5)');   // 60 days old
+  c.cleanupOld();
+  const out4 = c.getJobs();
+  check('cleanupOld invalidates the cache when it removes a job', out4.jobs.length === 1, out4.jobs.length);
+
+  // a payload bigger than one chunk is split and reassembled correctly
+  c.invalidateJobsCache_();
+  const bigDesc = 'x'.repeat(30000);
+  jd.push(row({ id: 'c', dedupeKey: 'c', title: 'Big Description Job', company: 'Big Co', source: 'Board', url: 'https://x/c', description: bigDesc }));
+  const out5 = c.getJobs();
+  const n = Number(c._cache['geojobs:jobs:v1:n']);
+  check('a large payload is split into more than one chunk', n > 1, n);
+  check('every chunk stays under the 100 KB cache limit', Object.keys(c._cache).filter(k => /^geojobs:jobs:v1:\d+$/.test(k)).every(k => Buffer.byteLength(c._cache[k], 'utf8') < 100000));
+  check('chunks reassemble into the original payload', out5.jobs.some(j => j.description === bigDesc));
+
+  // a missing/expired chunk falls back to a fresh read instead of throwing
+  delete c._cache['geojobs:jobs:v1:1'];
+  const out6 = c.getJobs();
+  check('a missing chunk falls back to a full read', out6.jobs.some(j => j.description === bigDesc));
 }
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed\n');

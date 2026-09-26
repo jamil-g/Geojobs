@@ -736,6 +736,8 @@ function ingest_(label, pick) {
     // 5. rows you add by hand (e.g. from LinkedIn) get classified + geocoded too
     enrichManualRows_(sh, geo);
 
+    invalidateJobsCache_();   // public getJobs() must not serve last run's data
+
     log_(label, 'new=' + fresh.length + ' raw=' + raws.length + ' ' + JSON.stringify(stats) +
       ' geocodes=' + geo.calls + ' ' + Math.round((Date.now() - t0) / 1000) + 's');
   } finally {
@@ -757,6 +759,7 @@ function cleanupOld() {
   const last = sh.getLastRow();
   if (last > 1) sh.getRange(2, 1, last - 1, HEADERS.length).clearContent();
   if (keep.length) sh.getRange(2, 1, keep.length, HEADERS.length).setValues(keep.map(r => HEADERS.map(h => r[h])));
+  invalidateJobsCache_();
   log_('cleanupOld', 'removed ' + (rows.length - keep.length));
 }
 
@@ -839,9 +842,80 @@ function doGet(e) {
   }
 }
 
+// getJobs() is public traffic's only door into the sheet, so its payload is kept
+// in CacheService: a full sheet read happens at most once per JOBS_CACHE_SECONDS,
+// not once per visitor. ingest_ and cleanupOld invalidate it the moment the Jobs
+// tab actually changes, so the cache is never more than one run stale by accident.
+// A single cache value is capped at 100 KB, so the JSON is split into chunks
+// (JOBS_CACHE_CHUNK_CHARS characters each, comfortably under that even for
+// Hebrew/Arabic/CJK text) stored under numbered keys, with a ':n' key holding
+// the chunk count. Any of that missing or unparsable just falls back to a
+// fresh sheet read — the cache is an optimization, never a source of truth.
+const JOBS_CACHE_KEY = 'geojobs:jobs:v1';
+const JOBS_CACHE_SECONDS = 21600;      // CacheService's own maximum (6 h); a safety net, since ingest_/cleanupOld invalidate it directly
+const JOBS_CACHE_CHUNK_CHARS = 20000;  // worst case (4 bytes/char) ≈ 80 KB, safely under the 100 KB per-value cap
+
+/** Split a string into chunks without breaking a surrogate pair (emoji etc.) across two. */
+function jobsCacheChunks_(str) {
+  const chunks = [];
+  let i = 0;
+  while (i < str.length) {
+    let end = Math.min(i + JOBS_CACHE_CHUNK_CHARS, str.length);
+    if (end < str.length) {
+      const c = str.charCodeAt(end - 1);
+      if (c >= 0xD800 && c <= 0xDBFF) end--;   // high surrogate: keep its pair together in the next chunk
+    }
+    chunks.push(str.slice(i, end));
+    i = end;
+  }
+  return chunks;
+}
+
+function readJobsCache_() {
+  const cache = scriptCache_();
+  if (!cache) return null;
+  try {
+    const n = Number(cache.get(JOBS_CACHE_KEY + ':n') || 0);
+    if (!n) return null;
+    const parts = [];
+    for (let i = 0; i < n; i++) {
+      const part = cache.get(JOBS_CACHE_KEY + ':' + i);
+      if (part === null) return null;   // a chunk expired or was evicted: fall back to a full read
+      parts.push(part);
+    }
+    return JSON.parse(parts.join(''));
+  } catch (e) { return null; }
+}
+
+function writeJobsCache_(payload) {
+  const cache = scriptCache_();
+  if (!cache) return;
+  try {
+    const chunks = jobsCacheChunks_(JSON.stringify(payload));
+    const values = {};
+    chunks.forEach((c, i) => { values[JOBS_CACHE_KEY + ':' + i] = c; });
+    values[JOBS_CACHE_KEY + ':n'] = String(chunks.length);
+    cache.putAll(values, JOBS_CACHE_SECONDS);
+  } catch (e) { /* best effort: a visitor just gets a fresh read next time */ }
+}
+
+/** Call once the Jobs sheet actually changes (ingest_, cleanupOld), so getJobs() never serves stale data. */
+function invalidateJobsCache_() {
+  const cache = scriptCache_();
+  if (!cache) return;
+  try {
+    const n = Number(cache.get(JOBS_CACHE_KEY + ':n') || 0);
+    const keys = [JOBS_CACHE_KEY + ':n'];
+    for (let i = 0; i < n; i++) keys.push(JOBS_CACHE_KEY + ':' + i);
+    cache.removeAll(keys);
+  } catch (e) { }
+}
+
 /** Called by the frontend (google.script.run) or via ?format=json */
 function getJobs() {
   loadConfig_({ quiet: true });
+  const cached = readJobsCache_();
+  if (cached) return cached;
   const rows = readRows_(ensureSheets_());
   const jobs = rows.filter(r => r.title).map(r => {
     const o = {};
@@ -853,7 +927,9 @@ function getJobs() {
     });
     return o;
   });
-  return { updatedAt: new Date().toISOString(), count: jobs.length, config: CFG.MAP, jobs: jobs };
+  const payload = { updatedAt: new Date().toISOString(), count: jobs.length, config: CFG.MAP, jobs: jobs };
+  writeJobsCache_(payload);
+  return payload;
 }
 
 // ─────────────────────────────── CLASSIFY ───────────────────────────────────
