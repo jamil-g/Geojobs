@@ -33,7 +33,7 @@ Want your own map with your own data? Everything runs in your Google account, so
 
 ### 1a. Copy the template sheet (quickest)
 
-1. Open **[the template](https://docs.google.com/spreadsheets/d/SHEET-ID/copy)** and click **Make a copy**.
+1. Open **[the template](https://docs.google.com/spreadsheets/d/1v9E-BjbIEMgSl9b3GSNSZ_2VmU-nEIQuxn-pZu5gDq0/copy)** and click **Make a copy**.
    You get the sheet with all its settings tabs, the current jobs, and the Apps Script code already inside.
    **Not copied:** API keys, scheduled runs and the web app. Those are yours to set up, which also means the original owner's keys never reach your copy.
 2. In your copy: **Extensions → Apps Script → Project Settings → Script properties**, add your own keys. All are optional:
