@@ -497,7 +497,8 @@ function src_jsearch_() {
         const pubKey = publisher.toLowerCase().replace(/[^a-z]/g, '');
         const home = Object.keys(PUBLISHER_HOMES).find(k => pubKey.indexOf(k) === 0);
         const types = [].concat(x.job_employment_types || x.job_employment_type || []).join(' ');
-        const loc = x.job_location || [x.job_city, x.job_state, x.job_country].filter(String).join(', ');
+        const parts = [x.job_city, x.job_state, x.job_country].filter(String).join(', ');
+        const loc = x.job_location && !(parts && ANYWHERE_RE.test(x.job_location)) ? x.job_location : parts || x.job_location || '';
         out.push({
           source: publisher, sourceHome: home ? PUBLISHER_HOMES[home] : originOf_(x.job_apply_link),
           title: x.job_title, company: x.employer_name, url: x.job_apply_link || x.job_google_link,
@@ -945,7 +946,26 @@ function isGeoJob_(r) {
   return kwRes_().filter(re => re.test(d)).length >= 2;
 }
 
+/** "Anywhere" / "Remote (Worldwide)" and the like: a location that names no place. */
+const ANYWHERE_RE = /^\s*(remote[\s,:(-]*)?(anywhere|worldwide|global)\)?\s*$/i;
+
+/**
+ * The "Location: Vienna, VA, US" line many ATS posts start with. Used when the board's own location
+ * is a placeholder (Google for Jobs reports some ZipRecruiter posts as "Anywhere").
+ * Stops at the line end or, in whitespace-collapsed text, at the next known header.
+ */
+function locationFromText_(text) {
+  const m = String(text || '').match(/\b(?:job |work |primary )?location\s*:[ \t]*([^\n]{2,200})/i);
+  if (!m) return '';
+  const v = m[1].split(/\s+(?=(?:date posted|posted|job id|req(?:uisition)?(?: id| number)?|category|subcategory|schedule|shift|travel|department|salary|pay|job type|employment type|(?:minimum )?clearance(?: required| level)?|work model|potential for remote work)\s*:)/i)[0];
+  return v.replace(/[\s,.;]+$/, '').slice(0, 80);
+}
+
 function normalize_(r) {
+  if (!String(r.locationRaw || '').trim() || ANYWHERE_RE.test(r.locationRaw)) {
+    const l = locationFromText_(r.description);
+    if (l && !ANYWHERE_RE.test(l)) r = Object.assign({}, r, { locationRaw: l });
+  }
   const desc = (r.description || '').replace(/\s+/g, ' ').trim();
   const wm = classifyWorkMode_(r, desc);
   return {
@@ -983,15 +1003,19 @@ function classifyJobType_(hint, text) {
 function classifyWorkMode_(r, desc) {
   const loc = String(r.locationRaw || '');
   const t = ((r.title || '') + ' ' + loc + ' ' + desc.slice(0, 1500)).toLowerCase();
-  const hybrid = /\bhybrid|hybride|\b\d\s?(days?|x) (a week )?(in|at) (the )?office|teilweise remote|mobiles arbeiten|télétravail partiel/.test(t);
+  const hybrid = /\bhybrid|hybride|ora_hybrid|\b\d\s?(days?|x) (a week )?(in|at) (the )?office|teilweise remote|mobiles arbeiten|télétravail partiel/.test(t);
   if (r.workArrangement === 'hybrid') return { mode: 'hybrid', scope: '' };
   if (r.workArrangement === 'onsite' || r.workArrangement === 'on-site') return { mode: 'onsite', scope: '' };
   // A location that is only "Anywhere" can't be on-site or hybrid, whatever the description says;
   // without this the geocoder gets "Anywhere" and the job ends up 'unknown'.
-  if (/^\s*(remote[\s,:(-]*)?(anywhere|worldwide|global)\)?\s*$/i.test(loc)) return { mode: 'remote-worldwide', scope: 'Worldwide' };
+  if (ANYWHERE_RE.test(loc)) return { mode: 'remote-worldwide', scope: 'Worldwide' };
+  if (hybrid) return { mode: 'hybrid', scope: '' };
+  // The post says outright it is on-site (Oracle Recruiting's ORA_ON_SITE, "Remote work: No"…):
+  // that beats a board's remote flag, which is sometimes set just because the location was missing.
+  if (/\bora_on_site\b|remote work\s*:\s*(no\b|none\b|not\b|on[- ]?site)|\bon[- ]?site only\b|\b(100%|fully) on[- ]?site\b|\bnot (a )?remote\b|\bno remote (work|option)/.test(t))
+    return { mode: 'onsite', scope: '' };
   const remote = r.remoteHint === true ||
     /\bremote\b|work from home|\bwfh\b|télétravail|homeoffice|home office|fully remote|100% remote|teletrabajo|remoto|telecommute/.test(t);
-  if (hybrid) return { mode: 'hybrid', scope: '' };
   if (!remote) return { mode: 'onsite', scope: '' };
   const scope = String(r.remoteScopeHint || loc || '').trim();
   if (!scope || /worldwide|anywhere|global|any location|all countries|world|🌍|🌎|🌏/i.test(scope))

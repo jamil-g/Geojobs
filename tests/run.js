@@ -155,6 +155,20 @@ console.log('\nClassification');
   check('non-GIS job filtered out', x.geo === false, x);
   x = cls({ title: 'GIS Analyst', description: 'Great team.', workArrangement: 'hybrid', remoteHint: true });
   check('JSearch work_arrangement=hybrid wins over remote flag', x.mode === 'hybrid', x);
+  x = cls({ title: 'GIS Analyst', description: 'Potential for Remote Work: ORA_ON_SITE', locationRaw: 'Reston, VA', remoteHint: true, remoteScopeHint: 'US' });
+  check('explicit on-site line beats a remote flag', x.mode === 'onsite', x);
+
+  // Synthetic ATS-style post that Google for Jobs listed as "Anywhere"
+  const ats = 'Job description\nJob ID: 1234567\n\nLocation: Vienna, VA, US\n\nDate Posted: 2026-08-04\n\n' +
+    'Category: Engineering\n\nPotential for Remote Work: ORA_ON_SITE\n\nBuild GIS web maps.';
+  let j = c.normalize_({ title: 'Front End Developer - GIS', company: 'Acme', url: 'https://x.test/1', description: ats,
+    locationRaw: 'Anywhere', remoteHint: true, remoteScopeHint: 'US' });
+  check('"Anywhere" replaced by the post\'s Location line, on-site',
+    j.locationRaw === 'Vienna, VA, US' && j.workMode === 'onsite', { loc: j.locationRaw, mode: j.workMode });
+  check('Location line read from whitespace-collapsed text (manual rows)',
+    c.locationFromText_(ats.replace(/\s+/g, ' ')) === 'Vienna, VA, US', c.locationFromText_(ats.replace(/\s+/g, ' ')));
+  j = c.normalize_({ title: 'GIS Analyst', company: 'Acme', url: 'https://x.test/2', description: 'Location: Remote, worldwide team.', locationRaw: 'Anywhere', remoteHint: true });
+  check('a truly remote "Anywhere" post stays worldwide', j.workMode === 'remote-worldwide', j.workMode);
 }
 
 console.log('\nLocation splitting');
