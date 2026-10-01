@@ -143,6 +143,12 @@ console.log('\nClassification');
   check('German hybrid post', x.lang === 'de' && x.mode === 'hybrid', x);
   x = cls({ title: 'Freelance QGIS plugin dev', description: 'hourly rate, work from anywhere', remoteHint: true, remoteScopeHint: 'Worldwide' });
   check('freelance, remote worldwide', x.type === 'freelance' && x.mode === 'remote-worldwide', x);
+  x = cls({ title: 'GIS Analyst', description: 'Hybrid team, flexible hours.', locationRaw: 'Anywhere' });
+  check('location "Anywhere" beats a hybrid description', x.mode === 'remote-worldwide' && x.scope === 'Worldwide', x);
+  x = cls({ title: 'GIS Analyst', description: 'Great team.', locationRaw: 'Remote (Worldwide)' });
+  check('"Remote (Worldwide)" is worldwide', x.mode === 'remote-worldwide', x);
+  x = cls({ title: 'GIS Analyst', description: 'Hybrid, 2 days in the office.', locationRaw: 'Anywhere in Germany' });
+  check('"Anywhere in Germany" left to the normal rules', x.mode === 'hybrid', x);
   x = cls({ title: 'مطور نظم المعلومات الجغرافية', description: 'نبحث عن مطور نظم المعلومات الجغرافية للعمل في الرياض' });
   check('Arabic post detected and kept', x.lang === 'ar' && x.geo, x);
   x = cls({ title: 'Frontend developer', description: 'React and TypeScript' });
@@ -309,7 +315,7 @@ console.log('\nSettings: setup creates the tabs');
   check('feeds seeded with flags', JSON.stringify(rowsOf(c, 'Feeds')[1].slice(3, 6)) === '[true,true,true]', rowsOf(c, 'Feeds')[1]);
   check('JSearch queries seeded, UAE with country', rowsOf(c, 'JSearchQueries').some(r => r[0] === 'GIS developer' && r[1] === 'ae'));
   check('every source listed', rowsOf(c, 'Sources').length === run(c, 'SOURCES.length'));
-  check('MapConfig anchor as JSON text', rowsOf(c, 'MapConfig').find(r => r[0] === 'WORLD_ANCHOR')[1] === '[-33,16]');
+  check('MapConfig has no retired settings', !rowsOf(c, 'MapConfig').some(r => r[0] === 'WORLD_ANCHOR' || r[0] === 'ZOOM_WORLDWIDE'));
   const t = c._triggers.map(x => x.fn + ':' + (x.everyHours || '') + (x.atHour !== undefined ? '@' + x.atHour : '')).sort();
   check('triggers from defaults', JSON.stringify(t) === JSON.stringify(['cleanupOld:@3', 'runFetch:6', 'runJSearch:@7']), t);
   check('no warnings for the defaults', !has(c, /^settings \|.*(unknown|must|invalid|secret)/i), c._logs);
@@ -337,7 +343,8 @@ console.log('\nSettings: values from the sheet');
   setKV(c, 'Config', 'FOO', 1);                        // unknown
   setKV(c, 'Config', 'GOOGLE_MAPS_KEY', 'AIzaSECRET'); // secret in the sheet
   setKV(c, 'MapConfig', 'DEFAULT_THEME', 'light');
-  setKV(c, 'MapConfig', 'WORLD_ANCHOR', '[200, 0]');
+  setKV(c, 'MapConfig', 'WORLD_ANCHOR', '[200, 0]');      // retired: older sheets still have the row
+  setKV(c, 'MapConfig', 'DEFAULT_GROUP', 'mode');        // grouping by work mode was removed from the page
   const p = c.loadConfig_({ fresh: true });
   const C = k => run(c, 'CFG.' + k);
   check('number typed as text is accepted', C('MAX_AGE_DAYS') === 30, C('MAX_AGE_DAYS'));
@@ -349,7 +356,8 @@ console.log('\nSettings: values from the sheet');
   check('secret in the sheet ignored and reported', p.warnings.some(w => /GOOGLE_MAPS_KEY looks like a secret/.test(w)) && run(c, 'CFG.GOOGLE_MAPS_KEY') === undefined);
   check('warnings written to the Log', has(c, /^settings \| Config row \d+: FOO|^settings \| Config row \d+: unknown setting "FOO"/));
   check('map theme from MapConfig', C('MAP.DEFAULT_THEME') === 'light');
-  check('bad anchor → default kept', JSON.stringify(C('MAP.WORLD_ANCHOR')) === '[-33,16]' && p.warnings.some(w => /WORLD_ANCHOR must be/.test(w)));
+  check('retired setting ignored without a warning', C('MAP.WORLD_ANCHOR') === undefined && !p.warnings.some(w => /WORLD_ANCHOR/.test(w)), p.warnings);
+  check('retired list grouping → default kept', C('MAP.DEFAULT_GROUP') === 'date' && p.warnings.some(w => /DEFAULT_GROUP must be one of: date, country/.test(w)), p.warnings);
   const out = c.getJobs();
   check('map settings sent with the data', out.config && out.config.DEFAULT_THEME === 'light' && out.config.ZOOM_CITY === 10, out.config);
 }

@@ -75,14 +75,25 @@ button, input, select { font: inherit; color: inherit; }
 .search { position: relative; }
 .search input { width: 100%; padding: 9px 12px 9px 34px; border-radius: 9px; border: 1px solid var(--rule); background: var(--shelf-2); }
 .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--ink-3); }
-.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.row > .lbl { color: var(--ink-3); font-size: 12px; width: 62px; flex: none; }
+.flabel { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.field select { width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--shelf-2); font-size: 12.5px; }
+.field select.on { border-color: var(--focus); color: var(--focus); }
+.active-bar { display: flex; align-items: flex-start; gap: 10px; padding: 9px 18px; border-bottom: 1px solid var(--rule); }
+.active-bar[hidden] { display: none; }
+.active-bar .link-btn { flex: none; margin-top: 3px; }
+.pills { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px 2px 10px; border-radius: 999px; font-size: 12px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--focus) 50%, transparent); background: color-mix(in srgb, var(--focus) 12%, transparent); color: var(--focus); }
+.pill:hover { background: color-mix(in srgb, var(--focus) 22%, transparent); }
+.pill b { font-weight: 700; font-size: 13px; line-height: 1; }
+.listbar { display: flex; align-items: center; gap: 8px; padding: 8px 18px; border-bottom: 1px solid var(--rule); }
+.listbar .flabel { margin: 0; }
 .chip { border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .chip:hover { border-color: var(--ink-3); }
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--deep); border-color: var(--ink); }
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.selects { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-.selects select { width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--shelf-2); font-size: 12.5px; }
 .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 9px; overflow: hidden; }
 .seg button { border: 0; background: transparent; padding: 5px 11px; font-size: 12.5px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--shelf-2); color: var(--focus); font-weight: 600; }
@@ -124,6 +135,7 @@ button, input, select { font: inherit; color: inherit; }
 #legend button { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; }
 #legend button:hover { color: var(--focus); }
 #legend .n { margin-left: auto; color: var(--ink-3); }
+#legend .note { color: var(--ink-3); font-size: 11px; }
 #legend hr { border: 0; border-top: 1px solid var(--rule); margin: 4px 0; width: 100%; }
 
 #credit { position: absolute; z-index: 4; left: 50%; bottom: 10px; transform: translateX(-50%);
@@ -226,27 +238,41 @@ button, input, select { font: inherit; color: inherit; }
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
       <input id="q" type="search" placeholder="Search title, company, skill, city" aria-label="Search jobs">
     </label>
-    <div class="row" id="typeChips"><span class="lbl">Contract</span></div>
-    <div class="row" id="modeChips"><span class="lbl">Work</span></div>
-    <div class="selects">
-      <select id="lang" aria-label="Language"><option value="">Any language</option></select>
-      <select id="source" aria-label="Job board"><option value="">All boards</option></select>
-      <select id="days" aria-label="Posted within">
-        <option value="0">Any date</option><option value="2">Last 48 h</option><option value="7">Last 7 days</option>
-        <option value="14">Last 14 days</option><option value="30">Last 30 days</option>
-      </select>
+    <div class="fgroup">
+      <span class="flabel">Work arrangement</span>
+      <div class="chips" id="modeChips"></div>
     </div>
-    <div class="row">
-      <span class="lbl">Group by</span>
-      <div class="seg" id="groupSeg">
-        <button data-g="date" aria-pressed="true">Date</button>
-        <button data-g="country" aria-pressed="false">Country</button>
-        <button data-g="type" aria-pressed="false">Contract</button>
-        <button data-g="mode" aria-pressed="false">Work</button>
-      </div>
-      <label class="toggle" title="Scrolling the list moves the map"><input type="checkbox" id="follow" checked> Follow scroll</label>
+    <div class="fgroup">
+      <span class="flabel">Contract</span>
+      <div class="chips" id="typeChips"></div>
     </div>
-    <div class="row"><button class="link-btn" id="reset">Clear filters</button></div>
+    <div class="fields">
+      <label class="field"><span class="flabel">Country</span>
+        <select id="country"><option value="">All countries</option></select></label>
+      <label class="field"><span class="flabel">Posted</span>
+        <select id="days">
+          <option value="0">Any date</option><option value="2">Last 48 h</option><option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option><option value="30">Last 30 days</option>
+        </select></label>
+      <label class="field"><span class="flabel">Language</span>
+        <select id="lang"><option value="">Any language</option></select></label>
+      <label class="field"><span class="flabel">Job board</span>
+        <select id="source"><option value="">All boards</option></select></label>
+    </div>
+  </div>
+
+  <div class="active-bar" id="activeBar" hidden aria-label="Active filters">
+    <div class="pills" id="pills"></div>
+    <button class="link-btn" id="reset">Clear all</button>
+  </div>
+
+  <div class="listbar">
+    <span class="flabel">Sort</span>
+    <div class="seg" id="groupSeg">
+      <button data-g="date" aria-pressed="true">Newest first</button>
+      <button data-g="country" aria-pressed="false">By country</button>
+    </div>
+    <label class="toggle" title="Scrolling the list moves the map"><input type="checkbox" id="follow" checked> Follow scroll</label>
   </div>
 
   <div id="list" tabindex="0"></div>
@@ -270,8 +296,7 @@ button, input, select { font: inherit; color: inherit; }
    uses google.script.run automatically. Empty + not in Apps Script = demo.   */
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbyHw7-6CbVz9M4gvZ_6yqv8ZEX_gAGal0wWD9VtDGyZ6HkLl0ujkqp7P60D-S3nwd6N1w/exec',                 // ← paste your Apps Script web-app URL (…/exec) here
-  WORLD_ANCHOR: [-33, 16],     // where "remote worldwide" jobs orbit (mid-Atlantic)
-  ZOOM: { city: 10, state: 6.2, country: 5, region: 3.4, worldwide: 4.6 }
+  ZOOM: { city: 10, state: 6.2, country: 5, region: 3.4 }
 };
 
 const MODES = {
@@ -288,7 +313,7 @@ const STYLES = {
   light: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
 };
 
-const state = { q: '', types: new Set(), modes: new Set(), lang: '', source: '', days: 0, group: 'date', follow: true, activeId: null };
+const state = { q: '', types: new Set(), modes: new Set(), country: '', lang: '', source: '', days: 0, group: 'date', follow: true, activeId: null };
 let ALL = [], VISIBLE = [], map, popup, theme = 'dark', steering = false, silentUntil = 0;
 const $ = s => document.querySelector(s);
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -313,11 +338,9 @@ function loadJobs() {
 function applyServerConfig(c) {
   if (!c || typeof c !== 'object') return;
   const num = (v, lo, hi) => typeof v === 'number' && isFinite(v) && v >= lo && v <= hi;
-  const a = c.WORLD_ANCHOR;
-  if (Array.isArray(a) && num(a[0], -180, 180) && num(a[1], -85, 85)) CONFIG.WORLD_ANCHOR = [a[0], a[1]];
-  [['city', 'ZOOM_CITY'], ['state', 'ZOOM_STATE'], ['country', 'ZOOM_COUNTRY'], ['region', 'ZOOM_REGION'], ['worldwide', 'ZOOM_WORLDWIDE']]
+  [['city', 'ZOOM_CITY'], ['state', 'ZOOM_STATE'], ['country', 'ZOOM_COUNTRY'], ['region', 'ZOOM_REGION']]
     .forEach(([level, key]) => { if (num(c[key], 0, 20)) CONFIG.ZOOM[level] = c[key]; });
-  if (['date', 'country', 'type', 'mode'].includes(c.DEFAULT_GROUP)) {
+  if (['date', 'country'].includes(c.DEFAULT_GROUP)) {
     state.group = c.DEFAULT_GROUP;
     document.querySelectorAll('#groupSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.g === state.group));
   }
@@ -326,8 +349,6 @@ function applyServerConfig(c) {
     document.documentElement.dataset.theme = theme;
     map.setStyle(STYLES[theme], { diff: false });   // full reload, so style.load re-adds our layers
   }
-  const w = map.getSource && map.getSource('world');
-  if (w) w.setData(worldLabel());
 }
 
 /* JSONP: load the data as a <script> from the Apps Script URL. A script tag
@@ -366,7 +387,6 @@ function diagnose(url) {
 function prepare(jobs) {
   const now = Date.now();
   const stacks = new Map();
-  let w = 0;
   jobs.forEach((j, i) => {
     j.id = j.id || 'j' + i;
     j._t = j.postedAt ? new Date(j.postedAt).getTime() : now;
@@ -374,15 +394,8 @@ function prepare(jobs) {
     j.workMode = MODES[j.workMode] ? j.workMode : 'onsite';
     j.jobType = TYPES[j.jobType] ? j.jobType : 'permanent';
     const hasXY = j.lat != null && j.lng != null && j.lat !== '' && !isNaN(j.lat);
-    if (j.workMode === 'remote-worldwide' || !hasXY) {
-      j._located = j.workMode === 'remote-worldwide';
-      if (!j._located) return;
-      const a = w * 2.39996, r = 0.95 * Math.sqrt(w++);            // golden-angle spiral
-      j._x = CONFIG.WORLD_ANCHOR[0] + r * Math.cos(a) * 1.25;
-      j._y = CONFIG.WORLD_ANCHOR[1] + r * Math.sin(a);
-      j._level = 'worldwide';
-      return;
-    }
+    // Remote-worldwide jobs have no place, and any spot we picked would read as a region: list only
+    if (j.workMode === 'remote-worldwide' || !hasXY) { j._located = false; return; }
     j._located = true;
     j._level = j.geoLevel || 'city';
     const key = (+j.lat).toFixed(3) + ',' + (+j.lng).toFixed(3);
@@ -400,6 +413,7 @@ function applyFilters() {
   VISIBLE = ALL.filter(j =>
     (!state.types.size || state.types.has(j.jobType)) &&
     (!state.modes.size || state.modes.has(j.workMode)) &&
+    (!state.country || placeOf(j) === state.country) &&
     (!state.lang || j.language === state.lang) &&
     (!state.source || j.source === state.source) &&
     (!cutoff || j._t >= cutoff) &&
@@ -421,8 +435,7 @@ function initMap() {
       map.easeTo({ center: f.geometry.coordinates, zoom: z + 0.3 }));
   });
   map.on('click', 'points', e => { const j = byId(e.features[0].properties.id); if (j) { openPopup(j); focusRow(j.id, true); } });
-  map.on('click', 'world-label', () => flyToWorld());
-  ['clusters', 'points', 'world-label'].forEach(l => {
+  ['clusters', 'points'].forEach(l => {
     map.on('mouseenter', l, () => map.getCanvas().style.cursor = 'pointer');
     map.on('mouseleave', l, () => map.getCanvas().style.cursor = '');
   });
@@ -442,7 +455,6 @@ function addLayers() {
   const modeColor = ['match', ['get', 'mode'], 'onsite', c('onsite'), 'hybrid', c('hybrid'),
     'remote-country', c('remote-country'), c('remote-worldwide')];
   map.addSource('jobs', { type: 'geojson', data: fc([]), cluster: true, clusterRadius: 44, clusterMaxZoom: 11 });
-  map.addSource('world', { type: 'geojson', data: worldLabel() });
 
   map.addLayer({ id: 'clusters', type: 'circle', source: 'jobs', filter: ['has', 'point_count'], paint: {
     'circle-color': cssVar('--shelf-2'), 'circle-stroke-color': cssVar('--rcountry'), 'circle-stroke-width': 1.5,
@@ -460,13 +472,9 @@ function addLayers() {
     'text-font': ['Montserrat Medium', 'Open Sans Bold'], 'text-size': 12, 'text-anchor': 'left', 'text-offset': [0.9, 0],
     'text-max-width': 16, 'text-justify': 'left', 'text-optional': true },
     paint: { 'text-color': cssVar('--ink'), 'text-halo-color': cssVar('--deep'), 'text-halo-width': 1.4 } });
-  map.addLayer({ id: 'world-label', type: 'symbol', source: 'world', layout: {
-    'text-field': 'Remote, anywhere in the world', 'text-font': ['Montserrat Medium', 'Open Sans Bold'], 'text-size': 13, 'text-allow-overlap': true },
-    paint: { 'text-color': cssVar('--rworld'), 'text-halo-color': cssVar('--deep'), 'text-halo-width': 1.5 } });
 }
 
 const fc = features => ({ type: 'FeatureCollection', features });
-const worldLabel = () => fc([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [CONFIG.WORLD_ANCHOR[0], CONFIG.WORLD_ANCHOR[1] + 7.5] } }]);
 function updateMap() {
   if (!map || !map.getSource('jobs')) return;
   map.getSource('jobs').setData(fc(VISIBLE.filter(j => j._located).map(j => ({
@@ -474,15 +482,17 @@ function updateMap() {
     properties: { id: j.id, mode: j.workMode, isNew: j._new,
       label: truncate(j.title, 42), sub: shortDate(j._t) + '  ' + TYPES[j.jobType] + (j.company ? '  ' + truncate(j.company, 22) : '') }
   }))));
-  const worldCount = VISIBLE.filter(j => j.workMode === 'remote-worldwide').length;
-  map.setLayoutProperty('world-label', 'visibility', worldCount ? 'visible' : 'none');
   highlight(state.activeId);
 }
 
 function highlight(id) { if (map && map.getLayer('halo')) map.setFilter('halo', ['==', ['get', 'id'], id || '__none']); }
 
 function flyToJob(j, withPopup) {
-  if (!j._located) return toast('No location found for this post');
+  if (!j._located) {                                         // list-only job: leave the map where it is
+    popup.remove(); state.activeId = j.id; highlight(null);
+    if (withPopup) toast(j.workMode === 'remote-worldwide' ? 'Remote worldwide: this job has no place on the map' : 'No location found for this post');
+    return;
+  }
   steering = true;
   const z = Math.max(CONFIG.ZOOM[j._level] || 8, j._level === 'city' && map.getZoom() > CONFIG.ZOOM.city ? map.getZoom() : 0);
   const sideOpen = !$('#side').classList.contains('closed') && innerWidth > 760;
@@ -494,11 +504,6 @@ function flyToJob(j, withPopup) {
   ret.classList.remove('on'); void ret.offsetWidth; ret.classList.add('on');
   state.activeId = j.id; highlight(j.id);
   if (withPopup) map.once('moveend', () => openPopup(j));
-}
-
-function flyToWorld() {
-  map.flyTo({ center: CONFIG.WORLD_ANCHOR, zoom: CONFIG.ZOOM.worldwide, speed: 1.3 });
-  state.modes = new Set(['remote-worldwide']); syncChips(); applyFilters();
 }
 
 function openPopup(j) {
@@ -545,8 +550,7 @@ function renderList() {
   VISIBLE.forEach(j => { const k = groupKey(j); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(j); });
   let keys = [...groups.keys()];
   if (state.group === 'date') keys.sort((a, b) => DATE_ORDER.indexOf(a) - DATE_ORDER.indexOf(b));
-  else if (state.group === 'country') keys.sort((a, b) => (a === WORLD_KEY) - (b === WORLD_KEY) || groups.get(b).length - groups.get(a).length || a.localeCompare(b));
-  else keys.sort((a, b) => groups.get(b).length - groups.get(a).length);
+  else keys.sort(placeOrder);                                // rows inside a group stay newest first
 
   list.innerHTML = keys.map(k => `
     <details class="group" open>
@@ -564,7 +568,8 @@ function rowHTML(j) {
   const m = MODES[j.workMode];
   const where = j.workMode === 'remote-worldwide' ? 'Anywhere'
     : [j.city, j.country].filter(Boolean).join(', ') || j.remoteScope || j.locationRaw || 'Location not found';
-  const coord = j._located && j.workMode !== 'remote-worldwide' ? dms(+j.lat, +j.lng) + (j._level === 'country' ? '  (capital)' : '') : 'Remote, no fixed location';
+  const coord = j._located ? dms(+j.lat, +j.lng) + (j._level === 'country' ? '  (capital)' : '')
+    : j.workMode === 'remote-worldwide' ? 'Remote worldwide, not on the map' : 'Location not found, not on the map';
   return `<div class="job" data-id="${esc(j.id)}" style="--c:var(${m.css})" tabindex="0" role="button" aria-label="${esc(j.title)}">
     <span class="when">${relDate(j._t)}</span>
     <h3>${esc(j.title)}</h3>
@@ -609,17 +614,18 @@ function focusRow(id, scroll) {
 }
 
 const WORLD_KEY = 'Remote, anywhere';
+const NOWHERE_KEY = 'Location not found';
 const DATE_ORDER = ['Today', 'Yesterday', 'This week', 'Last week', 'This month', 'Older'];
+// One place per job, shared by the country filter and the "By country" list
+const placeOf = j => j.workMode === 'remote-worldwide' ? WORLD_KEY : (j.country || j.remoteScope || NOWHERE_KEY);
+const placeRank = k => k === WORLD_KEY ? 1 : k === NOWHERE_KEY ? 2 : 0;
+const placeOrder = (a, b) => placeRank(a) - placeRank(b) || a.localeCompare(b);
 function groupKey(j) {
-  if (state.group === 'date') {
-    const days = Math.floor((startOfDay(Date.now()) - startOfDay(j._t)) / 864e5);
-    return days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? 'This week' : days < 14 ? 'Last week' : days < 31 ? 'This month' : 'Older';
-  }
-  if (state.group === 'country') return j.workMode === 'remote-worldwide' ? WORLD_KEY : (j.country || j.remoteScope || 'Location not found');
-  if (state.group === 'type') return j.jobType;
-  return j.workMode;
+  if (state.group === 'country') return placeOf(j);
+  const days = Math.floor((startOfDay(Date.now()) - startOfDay(j._t)) / 864e5);
+  return days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? 'This week' : days < 14 ? 'Last week' : days < 31 ? 'This month' : 'Older';
 }
-function groupLabel(k) { return state.group === 'type' ? TYPES[k] : state.group === 'mode' ? MODES[k].label : k; }
+const groupLabel = k => k;
 
 /* ═══════════════════════════ UI ═══════════════════════════════════════════ */
 function buildControls() {
@@ -631,15 +637,27 @@ function buildControls() {
   $('#lang').insertAdjacentHTML('beforeend', langs.map(l => `<option value="${l}">${esc(LANGS[l] || l)}</option>`).join(''));
   const srcs = [...new Set(ALL.map(j => j.source).filter(Boolean))].sort();
   $('#source').insertAdjacentHTML('beforeend', srcs.map(s => `<option>${esc(s)}</option>`).join(''));
+  // Countries first, then regions (a place with no country code, e.g. "Europe"), then the two "no place" buckets
+  const places = new Map();
+  ALL.forEach(j => { const k = placeOf(j), p = places.get(k) || { n: 0, cc: false }; p.n++; p.cc = p.cc || !!j.countryCode; places.set(k, p); });
+  const opts = ks => ks.sort(placeOrder).map(k => `<option value="${esc(k)}">${esc(k)} · ${places.get(k).n}</option>`).join('');
+  const all = [...places.keys()], special = k => placeRank(k) > 0;
+  const countries = all.filter(k => !special(k) && places.get(k).cc), regions = all.filter(k => !special(k) && !places.get(k).cc);
+  $('#country').insertAdjacentHTML('beforeend',
+    (countries.length ? `<optgroup label="Countries">${opts(countries)}</optgroup>` : '') +
+    (regions.length ? `<optgroup label="Regions">${opts(regions)}</optgroup>` : '') +
+    (all.some(special) ? `<optgroup label="No fixed place">${opts(all.filter(special))}</optgroup>` : ''));
 
-  document.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { toggleSet(state.types, b.dataset.type); syncChips(); applyFilters(); });
-  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { toggleSet(state.modes, b.dataset.mode); syncChips(); applyFilters(); });
+  document.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { toggleSet(state.types, b.dataset.type); syncControls(); applyFilters(); });
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { toggleSet(state.modes, b.dataset.mode); syncControls(); applyFilters(); });
   document.querySelectorAll('#groupSeg button').forEach(b => b.onclick = () => {
     state.group = b.dataset.g; document.querySelectorAll('#groupSeg button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderList(); });
   let qt; $('#q').oninput = e => { clearTimeout(qt); qt = setTimeout(() => { state.q = e.target.value; applyFilters(); }, 200); };
-  $('#lang').onchange = e => { state.lang = e.target.value; applyFilters(); };
-  $('#source').onchange = e => { state.source = e.target.value; applyFilters(); };
-  $('#days').onchange = e => { state.days = +e.target.value; applyFilters(); };
+  $('#country').onchange = e => { state.country = e.target.value; syncControls(); applyFilters(); fitAll(); };
+  $('#lang').onchange = e => { state.lang = e.target.value; syncControls(); applyFilters(); };
+  $('#source').onchange = e => { state.source = e.target.value; syncControls(); applyFilters(); };
+  $('#days').onchange = e => { state.days = +e.target.value; syncControls(); applyFilters(); };
+  $('#pills').onclick = e => { const b = e.target.closest('.pill'); if (b) { pillClears[b.dataset.i](); syncControls(); applyFilters(); } };
   $('#follow').onchange = e => { state.follow = e.target.checked; };
   $('#reset').onclick = resetFilters;
   $('#closeSide').onclick = () => $('#side').classList.add('closed');
@@ -659,14 +677,36 @@ function buildControls() {
   $('#list').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('job')) e.target.click(); });
 }
 
-function syncChips() {
+function syncControls() {
   document.querySelectorAll('[data-type]').forEach(b => b.setAttribute('aria-pressed', state.types.has(b.dataset.type)));
   document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', state.modes.has(b.dataset.mode)));
+  if ($('#q').value !== state.q) $('#q').value = state.q;
+  [['#country', state.country], ['#lang', state.lang], ['#source', state.source], ['#days', String(state.days)]].forEach(([sel, v]) => {
+    const el = $(sel); el.value = v; el.classList.toggle('on', v !== '' && v !== '0');
+  });
 }
 function resetFilters() {
-  Object.assign(state, { q: '', lang: '', source: '', days: 0 }); state.types.clear(); state.modes.clear();
-  $('#q').value = ''; $('#lang').value = ''; $('#source').value = ''; $('#days').value = '0';
-  syncChips(); applyFilters(); fitAll();
+  Object.assign(state, { q: '', country: '', lang: '', source: '', days: 0 }); state.types.clear(); state.modes.clear();
+  syncControls(); applyFilters(); fitAll();
+}
+
+/* Every active filter as a removable pill, visible even when the filter panel is folded */
+let pillClears = [];
+function renderPills() {
+  const pills = [];
+  const add = (label, clear) => pills.push({ label, clear });
+  if (state.q.trim()) add('“' + truncate(state.q.trim(), 24) + '”', () => { state.q = ''; });
+  state.modes.forEach(m => add(MODES[m].label, () => state.modes.delete(m)));
+  state.types.forEach(t => add(TYPES[t], () => state.types.delete(t)));
+  if (state.country) add(state.country, () => { state.country = ''; });
+  if (state.days) add($('#days').selectedOptions[0].textContent, () => { state.days = 0; });
+  if (state.lang) add(LANGS[state.lang] || state.lang, () => { state.lang = ''; });
+  if (state.source) add(state.source, () => { state.source = ''; });
+  pillClears = pills.map(p => p.clear);
+  $('#pills').innerHTML = pills.map((p, i) =>
+    `<button class="pill" data-i="${i}" title="Remove this filter">${esc(p.label)} <b aria-hidden="true">×</b></button>`).join('');
+  $('#activeBar').hidden = !pills.length;
+  return pills.length;
 }
 
 function renderStats() {
@@ -675,29 +715,27 @@ function renderStats() {
   $('#sNew').textContent = VISIBLE.filter(j => j._new).length;
   $('#sSources').textContent = new Set(VISIBLE.map(j => j.source)).size;
   $('#openCount').textContent = VISIBLE.length + ' jobs';
-  const active = state.types.size + state.modes.size + !!state.lang + !!state.source + !!state.days + !!state.q.trim();
+  const active = renderPills();
   $('#filterBadge').hidden = !active; $('#filterBadge').textContent = active;
 }
 
 function renderLegend() {
   const n = k => VISIBLE.filter(j => j.workMode === k).length;
   $('#legend').innerHTML = Object.entries(MODES).map(([k, v]) =>
-    `<button data-leg="${k}"><span class="dot" style="background:var(${v.css})"></span>${v.label}<span class="n">${n(k)}</span></button>`).join('') +
+    `<button data-leg="${k}"><span class="dot" style="background:var(${v.css})"></span>${v.label}${k === 'remote-worldwide' ? ' <span class="note">list only</span>' : ''}<span class="n">${n(k)}</span></button>`).join('') +
     `<hr><button data-leg="new"><span class="dot" style="background:transparent;border:2px solid var(--focus)"></span>Posted in the last 48 h</button>`;
   $('#legend').querySelectorAll('[data-leg]').forEach(b => b.onclick = () => {
     const k = b.dataset.leg;
-    if (k === 'new') { state.days = 2; $('#days').value = '2'; applyFilters(); return; }
-    if (k === 'remote-worldwide') return flyToWorld();
-    toggleSet(state.modes, k); syncChips(); applyFilters();
+    if (k === 'new') { state.days = 2; syncControls(); applyFilters(); return; }
+    toggleSet(state.modes, k); syncControls(); applyFilters();
   });
 }
 
 function fitAll() {
-  const pts = VISIBLE.filter(j => j._located && j.workMode !== 'remote-worldwide');
+  const pts = VISIBLE.filter(j => j._located);
   if (!pts.length) return;
   const b = new maplibregl.LngLatBounds();
   pts.forEach(j => b.extend([j._x, j._y]));
-  b.extend(CONFIG.WORLD_ANCHOR);
   const sideOpen = !$('#side').classList.contains('closed') && innerWidth > 760;
   map.fitBounds(b, { padding: { top: 60, bottom: 60, right: 230, left: sideOpen ? $('#side').offsetWidth + 50 : 40 }, maxZoom: 5, duration: 1400 });
 }
@@ -713,7 +751,7 @@ function relDate(t) {
   return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 7 ? d + ' days ago' : d < 31 ? Math.round(d / 7) + ' wk ago' : shortDate(t);
 }
 function dms(lat, lng) {
-  const f = (v, p, n) => { const a = Math.abs(v), d = Math.floor(a), m = Math.floor((a - d) * 60), s = Math.round(((a - d) * 60 - m) * 60);
+  const f = (v, p, n) => { const t = Math.round(Math.abs(v) * 3600), d = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60;   // round once, so 59.6″ carries into the minute
     return `${d}°${String(m).padStart(2, '0')}′${String(s).padStart(2, '0')}″${v >= 0 ? p : n}`; };
   return f(lat, 'N', 'S') + '  ' + f(lng, 'E', 'W');
 }

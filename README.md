@@ -142,7 +142,7 @@ Every setting lives in the Google Sheet, so you can change it without touching c
 | `JSearchQueries` | The daily LinkedIn/Indeed/Glassdoor searches, each with an optional country code |
 | `Sources` | Switch any job board on or off |
 | `RegionWords` | Words the geocoder doesn't understand (EMEA, LATAM, GCC…) and the place to look up instead |
-| `MapConfig` | The map: where worldwide-remote jobs gather, zoom levels, default light/dark theme, default list grouping |
+| `MapConfig` | The map: zoom levels, default light/dark theme, default list order (newest first or by country) |
 
 - Changes apply on the next run (edits clear the settings cache at once). **GeoJobs → Check settings** re-reads everything and tells you if a value is wrong; details go to the `Log` tab and the default is kept.
 - After changing `FETCH_EVERY_HOURS` or `JSEARCH_HOUR`, use **GeoJobs → Apply schedule**.

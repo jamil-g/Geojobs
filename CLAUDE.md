@@ -89,9 +89,9 @@ Other entry points: `cleanupOld` (daily, drops rows older than `CFG.MAX_AGE_DAYS
 
 - Single file, vanilla JS, MapLibre GL 4.7.1 from jsDelivr, CARTO `dark-matter` / `positron` styles. Symbol layers must use fonts that exist on CARTO's glyph server: `Montserrat Medium`, `Open Sans Bold` (others fail silently and can blank the GeoJSON layer).
 - `CONFIG.API_URL` = the `/exec` URL. Data load order in `loadJobs`: `google.script.run` (when served by Apps Script) → `jsonp(API_URL)` → demo data. On JSONP failure `diagnose()` fetches `?format=json` to tell the user *why* (old deployment, sign-in required, error page).
-- `applyServerConfig(data.config)` runs before `prepare`: `MapConfig` values (anchor, zooms, default theme and grouping) override `CONFIG`; malformed values are ignored.
+- `applyServerConfig(data.config)` runs before `prepare`: `MapConfig` values (zooms, default theme and list order) override `CONFIG`; malformed values are ignored.
 - Theme changes use `map.setStyle(url, { diff: false })`. With the default diffing, MapLibre removes the page's own layers and never fires `style.load`, so the markers vanish. Keep `diff: false`.
-- Pipeline: `prepare` (timestamps, worldwide spiral around `CONFIG.WORLD_ANCHOR`, golden-angle fan-out for jobs sharing a point) → `applyFilters` → `updateMap` / `renderList` / `renderStats` / `renderLegend`.
+- Pipeline: `prepare` (timestamps, golden-angle fan-out for jobs sharing a point; remote-worldwide and unlocated jobs get `_located = false` and are list-only, on purpose: any spot on the map would read as a region) → `applyFilters` → `updateMap` / `renderList` / `renderStats` / `renderLegend`.
 - Scroll-follow: an `IntersectionObserver` on list rows (`onRowsCross`) calls `flyToJob`. `silentUntil` suppresses it after programmatic scrolls and re-renders; keep that guard or the map fights the user.
 - Work-mode colours are CSS variables (`--onsite --hybrid --rcountry --rworld`) read into MapLibre paint via `cssVar()`; theme switch re-adds layers on `style.load`.
 - Everything user-provided goes through `esc()` before `innerHTML`. Keep it that way: job titles and descriptions are third-party text.
@@ -124,6 +124,7 @@ Owner requirement: every setting lives in the sheet, editable without code chang
 **How it works**
 - `CFG` is the defaults and the documentation. `CFG_DEFAULTS` is a deep copy taken at load. `loadConfig_(opts)` resets `CFG` to the defaults, then overlays the parsed tabs. Called at the start of `ingest_`, `cleanupOld`, `setup`, `applySchedule`, `checkSettings`, `testSources`, `testJSearch` and `getJobs`.
 - Parsed settings are cached in `CacheService` (`CONFIG_CACHE_KEY`, 5 min). The simple trigger `onEdit` clears the cache when a settings tab is edited. `opts.fresh` skips the cache; `opts.quiet` (web requests) doesn't write warnings to `Log`, so public traffic can't flood it.
+- Retired keys in `RETIRED_SETTINGS` (`WORLD_ANCHOR`, `ZOOM_WORLDWIDE`) are skipped without a warning, since older sheets and copies still have those rows.
 - Bad values: `parseSetting_` rejects them, the default stays, and a warning like `Config row 5: FETCH_EVERY_HOURS must be one of: 1, 2, 4, 6, 8, 12; using the default.` goes to `Log`. Menu **Check settings** shows the count as a toast.
 - Keyword regexes compile lazily in `kwRes_()`, keyed on the identity of `CFG.KEYWORDS`. Don't reintroduce a module-level compiled list.
 - Schedule settings (`FETCH_EVERY_HOURS`, `JSEARCH_HOUR`) take effect through `installTriggers_()`: menu **Apply schedule** or `setup`. `installTriggers_` only replaces this project's three triggers.

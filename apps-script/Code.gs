@@ -97,7 +97,7 @@ const CFG = {
 
   // Map display settings, sent to the page with the data (MapConfig tab)
   MAP: {
-    WORLD_ANCHOR: [-33, 16], ZOOM_CITY: 10, ZOOM_STATE: 6.2, ZOOM_COUNTRY: 5, ZOOM_REGION: 3.4, ZOOM_WORLDWIDE: 4.6,
+    ZOOM_CITY: 10, ZOOM_STATE: 6.2, ZOOM_COUNTRY: 5, ZOOM_REGION: 3.4,
     DEFAULT_THEME: 'dark', DEFAULT_GROUP: 'date'
   }
 };
@@ -181,15 +181,18 @@ const CONFIG_FIELDS = {
 
 // Settings in the MapConfig tab: sent to the map with the job data
 const MAP_FIELDS = {
-  WORLD_ANCHOR:   { type: 'json', check: v => Array.isArray(v) && v.length === 2 && Math.abs(v[0]) <= 180 && Math.abs(v[1]) <= 85 ? '' : 'must be [longitude, latitude], e.g. [-33, 16]', desc: '[longitude, latitude] where "remote worldwide" jobs gather.' },
   ZOOM_CITY:      { type: 'number', min: 0, max: 20, desc: 'Zoom when flying to a job pinned to a city.' },
   ZOOM_STATE:     { type: 'number', min: 0, max: 20, desc: 'Zoom for a job pinned to a state or province.' },
   ZOOM_COUNTRY:   { type: 'number', min: 0, max: 20, desc: 'Zoom for a job pinned to a country (its capital).' },
   ZOOM_REGION:    { type: 'number', min: 0, max: 20, desc: 'Zoom for a job pinned to a region such as Europe.' },
-  ZOOM_WORLDWIDE: { type: 'number', min: 0, max: 20, desc: 'Zoom for the "remote worldwide" cluster.' },
   DEFAULT_THEME:  { type: 'text', oneOf: ['dark', 'light'], desc: 'Map colours when the page opens.' },
-  DEFAULT_GROUP:  { type: 'text', oneOf: ['date', 'country', 'type', 'mode'], desc: 'How the job list is grouped when the page opens (type = contract, mode = work mode).' }
+  DEFAULT_GROUP:  { type: 'text', oneOf: ['date', 'country'], desc: 'How the job list is sorted when the page opens: date = newest first, country = grouped by country A-Z.' }
 };
+
+// Settings that older sheets still have but nothing reads any more. Skipped quietly so copies of the
+// template don't log a warning on every run; the rows can be deleted by hand.
+// WORLD_ANCHOR / ZOOM_WORLDWIDE: remote-worldwide jobs are list-only, they no longer get a spot on the map.
+const RETIRED_SETTINGS = ['WORLD_ANCHOR', 'ZOOM_WORLDWIDE'];
 
 const CFG_DEFAULTS = JSON.parse(JSON.stringify(CFG));
 let _cfgLoaded = false;
@@ -234,6 +237,7 @@ function readConfigSheets_() {
       if (!key) return;
       if (SECRET_NAME_RE.test(key)) return warn(tab, r._row, key + ' looks like a secret. API keys belong in Script properties, never in the sheet (it may be public). Ignored.');
       const f = fields[key];
+      if (!f && RETIRED_SETTINGS.includes(key)) return;
       if (!f) return warn(tab, r._row, 'unknown setting "' + key + '", ignored.');
       const v = parseSetting_(r.value, f, msg => warn(tab, r._row, key + ' ' + msg + '; using the default.'));
       if (v !== undefined) t[key] = v;
@@ -982,6 +986,9 @@ function classifyWorkMode_(r, desc) {
   const hybrid = /\bhybrid|hybride|\b\d\s?(days?|x) (a week )?(in|at) (the )?office|teilweise remote|mobiles arbeiten|télétravail partiel/.test(t);
   if (r.workArrangement === 'hybrid') return { mode: 'hybrid', scope: '' };
   if (r.workArrangement === 'onsite' || r.workArrangement === 'on-site') return { mode: 'onsite', scope: '' };
+  // A location that is only "Anywhere" can't be on-site or hybrid, whatever the description says;
+  // without this the geocoder gets "Anywhere" and the job ends up 'unknown'.
+  if (/^\s*(remote[\s,:(-]*)?(anywhere|worldwide|global)\)?\s*$/i.test(loc)) return { mode: 'remote-worldwide', scope: 'Worldwide' };
   const remote = r.remoteHint === true ||
     /\bremote\b|work from home|\bwfh\b|télétravail|homeoffice|home office|fully remote|100% remote|teletrabajo|remoto|telecommute/.test(t);
   if (hybrid) return { mode: 'hybrid', scope: '' };
