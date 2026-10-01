@@ -177,6 +177,12 @@ button, input, select { font: inherit; color: inherit; }
 .pop .via a { color: var(--ink-2); }
 .pop .also { padding: 0 16px 10px; font-size: 12px; color: var(--ink-3); }
 .pop .also a { color: var(--ink-2); margin-right: 8px; }
+/* Details card for list-only jobs (remote worldwide, location not found): fixed in the middle of the
+   visible map, so it doesn't pretend to sit on a place and stays put while the map moves */
+#card { position: absolute; z-index: 6; top: 50%; left: 50%; transform: translate(-50%, -50%); max-height: calc(100% - 120px); overflow-y: auto;
+  background: var(--shelf); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.4); }
+#card[hidden] { display: none; }
+.card-close { position: absolute; right: 6px; top: 6px; z-index: 1; border: 0; background: none; color: var(--ink-2); font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px; }
 .maplibregl-ctrl-group { background: var(--shelf) !important; border: 1px solid var(--rule); }
 .maplibregl-ctrl-group button + button { border-top-color: var(--rule) !important; }
 :root:not([data-theme="light"]) .maplibregl-ctrl-icon { filter: invert(1) hue-rotate(180deg); }
@@ -190,6 +196,7 @@ button, input, select { font: inherit; color: inherit; }
   .demo-note { margin-top: 6px; }
   #legend { display: none; }
   #credit { display: none; }
+  #card { top: 10px; left: 50% !important; transform: translateX(-50%); max-height: calc(38vh - 20px); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 </style>
@@ -284,6 +291,10 @@ button, input, select { font: inherit; color: inherit; }
 </button>
 
 <div id="legend" aria-label="Legend"></div>
+<div id="card" role="dialog" aria-label="Job details" hidden>
+  <button class="card-close" id="cardClose" aria-label="Close">×</button>
+  <div id="cardBody"></div>
+</div>
 <div id="credit">Developed by <strong>Jamil Garzuzi</strong> · © <span id="creditYear"></span> · <a href="mailto:jamil.garzuzi@gmail.com">jamil.garzuzi@gmail.com</a></div>
 <div id="toast" role="status"></div>
 <div id="loading"><p>Loading jobs…</p></div>
@@ -490,9 +501,10 @@ function highlight(id) { if (map && map.getLayer('halo')) map.setFilter('halo', 
 function flyToJob(j, withPopup) {
   if (!j._located) {                                         // list-only job: leave the map where it is
     popup.remove(); state.activeId = j.id; highlight(null);
-    if (withPopup) toast(j.workMode === 'remote-worldwide' ? 'Remote worldwide: this job has no place on the map' : 'No location found for this post');
+    if (withPopup) openCard(j); else closeCard();
     return;
   }
+  closeCard();
   steering = true;
   const z = Math.max(CONFIG.ZOOM[j._level] || 8, j._level === 'city' && map.getZoom() > CONFIG.ZOOM.city ? map.getZoom() : 0);
   const sideOpen = !$('#side').classList.contains('closed') && innerWidth > 760;
@@ -507,14 +519,33 @@ function flyToJob(j, withPopup) {
 }
 
 function openPopup(j) {
+  if (!j._located) return openCard(j);
+  closeCard();
+  popup.setLngLat([j._x, j._y]).setHTML(jobHTML(j)).addTo(map);
+}
+
+function openCard(j) {
+  $('#cardBody').innerHTML = jobHTML(j);
+  $('#card').hidden = false;
+  placeCard();
+  $('#card').scrollTop = 0;
+}
+function closeCard() { $('#card').hidden = true; }
+function placeCard() {                                       // centre of the map area the sidebar leaves free
+  const sideOpen = !$('#side').classList.contains('closed') && innerWidth > 760;
+  $('#card').style.left = sideOpen ? `calc(50% + ${($('#side').offsetWidth + 24) / 2}px)` : '50%';
+}
+
+function jobHTML(j) {
   const color = cssVar(MODES[j.workMode].css);
   const loc = j.workMode === 'remote-worldwide' ? 'Anywhere'
     : [j.city, j.country].filter(Boolean).join(', ') || j.locationRaw || 'Not stated';
-  const levelNote = { country: 'country level, pinned to the capital', region: 'region level', state: 'state level' }[j._level];
+  const levelNote = !j._located ? 'not shown on the map'
+    : { country: 'country level, pinned to the capital', region: 'region level', state: 'state level' }[j._level];
   const also = String(j.alsoOn || '').split(' | ').filter(Boolean).map(s => {
     const i = s.indexOf(' http'); return i > 0 ? `<a href="${esc(s.slice(i + 1))}" target="_blank" rel="noopener">${esc(s.slice(0, i))}</a>` : '';
   }).join('');
-  popup.setLngLat([j._x, j._y]).setHTML(`
+  return `
     <article class="pop">
       <div class="top" style="--c:${color}">
         <h2>${esc(j.title)}</h2>
@@ -535,7 +566,7 @@ function openPopup(j) {
         <a class="apply" href="${esc(j.url)}" target="_blank" rel="noopener">Open the posting</a>
         <span class="via">Source: <a href="${esc(j.sourceHome || j.url)}" target="_blank" rel="noopener">${esc(j.source)}</a></span>
       </div>
-    </article>`).addTo(map);
+    </article>`;
 }
 
 /* ═══════════════════════════ LIST ═════════════════════════════════════════ */
@@ -593,7 +624,7 @@ function onRowsCross(entries) {
   clearTimeout(crossTimer);
   crossTimer = setTimeout(() => {
     const j = byId(hit.target.dataset.id); if (!j) return;
-    setActiveRow(j.id); popup.remove(); flyToJob(j, false);
+    setActiveRow(j.id); popup.remove(); closeCard(); flyToJob(j, false);
   }, 180);
 }
 
@@ -660,11 +691,13 @@ function buildControls() {
   $('#pills').onclick = e => { const b = e.target.closest('.pill'); if (b) { pillClears[b.dataset.i](); syncControls(); applyFilters(); } };
   $('#follow').onchange = e => { state.follow = e.target.checked; };
   $('#reset').onclick = resetFilters;
-  $('#closeSide').onclick = () => $('#side').classList.add('closed');
+  $('#closeSide').onclick = () => { $('#side').classList.add('closed'); placeCard(); };
+  $('#cardClose').onclick = closeCard;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCard(); });
   const setFilters = open => { $('#side').classList.toggle('filters-off', !open); $('#filtersBtn').setAttribute('aria-expanded', open); };
   $('#filtersBtn').onclick = () => setFilters($('#side').classList.contains('filters-off'));
   setFilters(innerWidth > 760);                                // phones start with filters folded
-  $('#openSide').onclick = () => $('#side').classList.remove('closed');
+  $('#openSide').onclick = () => { $('#side').classList.remove('closed'); placeCard(); };
   $('#themeBtn').onclick = () => {
     theme = theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = theme;
