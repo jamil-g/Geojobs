@@ -155,6 +155,17 @@ The defaults themselves are in `CFG` at the top of `apps-script/Code.gs`. The on
 
 Map data © OpenStreetMap contributors, basemap © CARTO, rendering by MapLibre GL JS. Job data belongs to the boards it links to.
 
+
+## Project identity and attribution
+
+GeoJobs is an open-source project created and maintained by **Jamil Garzuzi**.
+
+The source code is licensed under the MIT License. If you copy, modify, distribute, sublicense, or sell copies or substantial portions of the software, the copyright and permission notice in `LICENSE` must be retained.
+
+The MIT License covers the source code; it does not grant rights to impersonate the original project or its author. Forks and derivative projects should make their origin clear and should not imply endorsement by, or affiliation with, the original GeoJobs project or Jamil Garzuzi.
+
+For the canonical project and live deployment, use the links at the top of this README.
+
 ## License
 
 MIT, see `LICENSE`.
